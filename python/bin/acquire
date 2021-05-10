@@ -1,0 +1,106 @@
+import argparse
+import json
+
+import os
+import datetime
+import glob
+
+import numpy as np
+import dateparser
+
+import matplotlib.pyplot as plt
+from matplotlib import mlab
+
+import fastfix
+
+def read_startdate(tag_dir):
+    start_file = os.path.join(tag_dir, "START_DATE.TXT")
+    
+    with open(start_file, 'r') as fp:
+        start_date_str = fp.readline().strip() # 2012-02-22 : 09:52:40 NZDT
+        print("start date: {}".format(start_date_str))
+        start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d : %H:%M:%S %Z')
+        start_date = dateparser.parse(start_date_str, date_formats=['%Y-%m-%d : %H:%M:%S %Z'], settings={'TO_TIMEZONE': 'UTC'})
+        print("start date: {}".format(start_date.isoformat()))
+        
+    return start_date
+
+def handle_file(binfile, fc0, iq, searchBand):
+    print("Handle File {}".format(binfile))
+    rtc_counter_val, sample_ms, sampling_rate, checksum, dat = fastfix.decode(binfile, iq)
+    ret = fastfix.acquire_all(dat, fs=sampling_rate, fc0=fc0, searchBand=searchBand)
+    
+    ret['infile'] = binfile
+    ret['rtc'] = rtc_counter_val
+    ret['sample_ms'] = sample_ms
+    ret['sampling_rate'] = sampling_rate
+
+
+    return ret, dat
+
+    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Acquire SV signals from Max2769B GPS data.')
+    parser.add_argument('--tag-dir', required=False, help="The FastFix tag directory.")
+    parser.add_argument('--binfile', required=False, help="The binary data file.")
+    parser.add_argument('--outfile', required=True, help="The output data file.")
+    parser.add_argument('--decodedfile', help="The decoded file.")
+    parser.add_argument('--fc0', type=float, required=True, help="Center Frequency.")
+    parser.add_argument('--resolution', type=int, default=1, help="Number of bits per sample.")
+    parser.add_argument('--epochs', type=int, default=2, help="Number of code epochs.")
+    parser.add_argument('--iq', action='store_true', help="Use I/Q complex baseband.")
+    parser.add_argument('--spectrum', action='store_true', help="Plot the spectrum of the data.")
+    parser.add_argument('--corr-plot', action='store_true', help="Plot the correlations of each SV.")
+    ARGS = parser.parse_args()
+    
+    if ARGS.tag_dir is not None:
+        # Do everything
+        try:
+            start_date = read_startdate(ARGS.tag_dir)
+            full_json = {}
+            full_json['start'] = start_date.isoformat()
+            
+            files = glob.glob(ARGS.tag_dir + '/**/*.BIN', recursive=True)
+            sorted_files = sorted(files)
+
+            full_json['fixes'] = []
+            for s in sorted_files:
+                try:
+                    ret, dat = handle_file(s, ARGS.fc0, ARGS.iq, searchBand=5000)
+                    print(ret)
+                    n_sat = len(ret['codephase'])
+                    if n_sat > 0:
+                        full_json['fixes'].append(ret)
+                except Exception as e:
+                    print(e)
+                    pass
+
+            with open(ARGS.outfile,'w') as fp:
+                json.dump(full_json, fp, sort_keys=True, indent=4)
+        except Exception as e:
+            print(e)
+            pass
+    else:
+        ret, dat = handle_file(ARGS.binfile, ARGS.fc0, ARGS.iq, searchBand=5000)
+        with open(ARGS.outfile,'w') as fp:
+            json.dump(ret, fp, sort_keys=True, indent=4)
+
+        if ARGS.spectrum:
+            plt.close('all')
+            title = "Captured GPS L1 spectrum"
+            # Plot a each channel
+            power, freq = mlab.psd(dat, Fs=ret['sampling_rate'], NFFT=2048)
+            plt.plot(freq/1e6, 10.0*np.log10(power))
+            #axarr[0].set_ylim([-80,-60])
+            plt.grid(True)
+            plt.xlabel("Freq (MHz)")
+            plt.ylabel("$P_{xx}$ (dB)")
+            plt.title(title)
+            plt.tight_layout()
+            fname = 'spectrum_plot.pdf'
+            plt.savefig(fname)
+
+        if ARGS.corr_plot:
+            rtc_counter_val, sample_ms, sampling_rate, checksum, dat = fastfix.decode(ARGS.binfile, ARGS.iq)
+            ret = fastfix.acquire_all(dat, fs=sampling_rate, fc0=ARGS.fc0, searchBand=5000, plot_corr=True)
+

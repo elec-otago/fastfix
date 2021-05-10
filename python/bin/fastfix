@@ -1,0 +1,78 @@
+import argparse
+import json
+from datetime import datetime
+
+import numpy as np
+
+import matplotlib.pyplot as plt
+from matplotlib import mlab
+
+import fastfix
+import logging
+
+    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='FastFix algorithm.')
+    parser.add_argument('--json-file', required=True, help="The JSON acquisition file.")
+    parser.add_argument('--output-file', required=True, help="The JSON output file.")
+    parser.add_argument('--mcmc', action='store_true', help="Use an MCMC.")
+    parser.add_argument('--plot', action='store_true', help="Make plots of the posteriors.")
+    parser.add_argument('--n', type=int, default=0, help="How many fixes to process.")
+    parser.add_argument('--clock-offset-std', type=float, default=2.0, help="Estimated error in the local clock (seconds).")
+    ARGS = parser.parse_args()
+    
+    infile = ARGS.json_file
+    
+    
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    fh = logging.FileHandler('disko.log')
+    fh.setLevel(logging.INFO)
+    
+    # create console handler and set level to debug
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+
+    # create formatter
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    # add formatter to ch
+    ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
+
+    # add ch to logger
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+    
+
+    
+    brdc_proxy = fastfix.GPSFileCache()
+
+    ret_json = {}
+    ret_json['fixes'] = []
+
+    with open(ARGS.json_file,'r') as fp:
+        data = json.load(fp)
+        
+        start_date_str = data['start']   # "start": "2012-02-21T20:52:40"
+
+        start_date = datetime.fromisoformat(start_date_str)
+
+        count = 0
+        estimated_clock_offset = (0.0, ARGS.clock_offset_std) # Mean and stdev
+        
+        for fix in data['fixes']:
+            if (ARGS.n > 0) and (count >= ARGS.n):
+                break
+            if ARGS.mcmc:
+                estimated_clock_offset = fastfix.process_mcmc(fix, start_date, brdc_proxy, local_clock_offset=estimated_clock_offset, plot=ARGS.plot)
+                ret_json['fixes'].append(fix)
+            else:
+                estimated_clock_offset = fastfix.process(fix, start_date, brdc_proxy, estimated_clock_offset=estimated_clock_offset, plot=ARGS.plot)
+                ret_json['fixes'].append(fix)
+            
+            count += 1
+
+            with open(ARGS.output_file, 'w') as fp:
+                json.dump(ret_json, fp, sort_keys=True, indent=4)
