@@ -1,5 +1,5 @@
 #
-# Copyright Tim Molteno 2020 tim@elec.ac.nz
+# Copyright Tim Molteno 2020-21 tim@elec.ac.nz
 #
 
 from setuptools import setup, find_packages
@@ -20,13 +20,12 @@ setup(name='fastfix',
     tests_require=['nose', 'ephem'],
     author_email='tim@elec.ac.nz',
     license='GPLv3',
-    install_requires=['numpy', 'matplotlib', 'scipy', 'pyfftw', 'unlzw'],
+    install_requires=['numpy', 'matplotlib', 'scipy', 'pyfftw', 'unlzw', 'pymc3'],
     packages=['fastfix'],
     scripts=['bin/fastfix', 'bin/acquire'],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Topic :: Scientific/Engineering",
-        "Topic :: Communications :: Ham Radio",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.5',
