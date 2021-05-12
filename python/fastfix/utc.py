@@ -5,11 +5,12 @@
 from datetime import tzinfo, timedelta, datetime, date
 import pytz
 
+
 class UTC(tzinfo):
     """UTC"""
+
     ZERO = timedelta(0)
     HOUR = timedelta(hours=1)
-
 
     def utcoffset(self, dt):
         return self.ZERO
@@ -24,7 +25,17 @@ class UTC(tzinfo):
 def utc_datetime(year, month, day, hour=0, minute=0, second=0.0):
     s = int(second)
     us = int((second - int(second)) * 1000000)
-    return datetime(year=year, month=month, day=day, hour=hour, minute=minute, second=s, microsecond=us, tzinfo=UTC())
+    return datetime(
+        year=year,
+        month=month,
+        day=day,
+        hour=hour,
+        minute=minute,
+        second=s,
+        microsecond=us,
+        tzinfo=UTC(),
+    )
+
 
 def now():
     t = datetime.now(UTC())
@@ -35,6 +46,7 @@ def to_utc(dt):
     if dt.tzinfo is None:
         dt = pytz.utc.localize(dt)
     return dt.astimezone(pytz.utc)
+
 
 def yday(d):
     # return day of year
