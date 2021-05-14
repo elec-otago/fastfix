@@ -7,7 +7,7 @@ test:
 .PHONY: roof_test fastfix
 
 mcmc:
-	fastfix --json-file test_data/roof_test_AF25.json --mcmc --output-file 'roof_test_AF25_mcmc.json'
+	fastfix --json-file test_data/roof_test_AF25.json --mcmc --plot --output-file 'roof_test_AF25_mcmc.json'
 
 fastfix:
 	fastfix --json-file test_data/roof_test_AF25.json --output-file 'roof_test_AF25_fastfix.json'

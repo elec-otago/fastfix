@@ -54,10 +54,8 @@ class PhaseLogLike(tt.Op):
                 #if pred_xm < 8.0 or meas_xm < 8.0:
                     #sigma = 2.0  # These should be ignored, therefore a huge variance.
 
-                logp += -np.log(np.sqrt(2.0 * np.pi) * sigma)
-                logp += -((Util.phase_delta(meas_ph, pred_ph)) ** 2.0) / (
-                    2.0 * sigma ** 2.0
-                )
+                logp += Util.gaussian_llh(x=meas_ph, mu=pred_ph, sigma=sigma)
+                
         except Exception as e:
             logger.info(f"Exception {e}: param: {theta}")
             logp = -999.0e99
@@ -111,8 +109,7 @@ class DopplerLogLike(tt.Op):
             ##if elevation < 5 and xmax < 9:
                 ##sigma = 300.0 * (10.0 - xmax)
 
-            logp += -np.log(np.sqrt(2.0 * np.pi) * sigma)
-            logp += -np.sum((meas - sim) ** 2.0 / (2.0 * sigma ** 2.0))
+            logp += Util.gaussian_llh(x=meas, mu=sim, sigma=200.0)
 
         outputs[0][0] = np.array(logp)
 

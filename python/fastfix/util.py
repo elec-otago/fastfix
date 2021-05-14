@@ -53,6 +53,14 @@ class Util(object):
         return np.abs(z - mu) / Util.PI2
 
     @classmethod
+    def gaussian_llh(self, x, mu, sigma):
+
+        llh = -np.log(np.sqrt(2.0 * np.pi) * sigma)
+        dx = x - mu
+        llh += -(dx*dx / (2.0 * sigma ** 2.0))
+        return llh
+
+    @classmethod
     def rad2deg(self, x):
         return x * 180.0 / Util.PI
 
