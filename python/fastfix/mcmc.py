@@ -19,6 +19,8 @@ from .location import Location
 from .angle import from_dms
 from .util import Util
 
+                
+    
 
 class PhaseLogLike(tt.Op):
     itypes = [tt.dvector]
@@ -47,13 +49,13 @@ class PhaseLogLike(tt.Op):
                 self.data, pred_phases, self.xmax, pred_xmax
             ):
                 sigma = 0.05
-                if meas_xm > 12:
-                    sigma = 0.0002  # Should be close to one sample which is 1/8k
-                if pred_xm < 8.0 or meas_xm < 8.0:
-                    sigma = 2.0  # These should be ignored, therefore a huge variance.
+                #if meas_xm > 12:
+                    #sigma = 0.0002  # Should be close to one sample which is 1/8k
+                #if pred_xm < 8.0 or meas_xm < 8.0:
+                    #sigma = 2.0  # These should be ignored, therefore a huge variance.
 
                 logp += -np.log(np.sqrt(2.0 * np.pi) * sigma)
-                logp += -((Util.phase_delta(meas_ph - pred_ph)) ** 2.0) / (
+                logp += -((Util.phase_delta(meas_ph, pred_ph)) ** 2.0) / (
                     2.0 * sigma ** 2.0
                 )
         except Exception as e:
@@ -106,8 +108,8 @@ class DopplerLogLike(tt.Op):
             # Change sigma when elevations are below 5 degrees.
             elevation = Satellite.elev_angle(x, r_0)
             #   For low xmax, and low elevation, the sigma should be somwehere like 3000
-            if elevation < 5 and xmax < 9:
-                sigma = 300.0 * (10.0 - xmax)
+            ##if elevation < 5 and xmax < 9:
+                ##sigma = 300.0 * (10.0 - xmax)
 
             logp += -np.log(np.sqrt(2.0 * np.pi) * sigma)
             logp += -np.sum((meas - sim) ** 2.0 / (2.0 * sigma ** 2.0))
@@ -240,9 +242,11 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         theta_do = tt.as_tensor_variable([lat, lon, delta_f])
         theta_ph = tt.as_tensor_variable([lat, lon, alt, offset, sow])
         like = pm.Potential("like", 10 * do_loglike(theta_do) + ph_loglike(theta_ph))
+        #like = pm.Potential("like", ph_loglike(theta_ph))
     with model:
-        step = pm.Metropolis([lat, lon, alt, offset, sow, delta_f])
-        trace = pm.sample(5000, step=step, random_seed=123, chains=4)
+        #step = pm.Metropolis([lat, lon, alt, offset, sow, delta_f])
+        #trace = pm.sample(5000, step=step, random_seed=123, chains=4)
+        trace = pm.sample_smc(2000, random_seed=123, parallel=True)  # http://docs.pymc.io/notebooks/SMC2_gaussians.html
         phase_stats = characterize_posterior(trace, plot=plot, plot_title="joint")
         acq["joint_mcmc"] = phase_stats
 
