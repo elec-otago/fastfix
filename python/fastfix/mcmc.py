@@ -238,13 +238,13 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         )  # Add half a second as the rtc is only accurate to 1 second.
         theta_do = tt.as_tensor_variable([lat, lon, delta_f])
         theta_ph = tt.as_tensor_variable([lat, lon, alt, offset, sow])
-        like = pm.Potential("like", 10 * do_loglike(theta_do) + ph_loglike(theta_ph))
+        like = pm.Potential("like", do_loglike(theta_do) + ph_loglike(theta_ph))
         #like = pm.Potential("like", ph_loglike(theta_ph))
     with model:
         #step = pm.Metropolis([lat, lon, alt, offset, sow, delta_f])
         #trace = pm.sample(5000, step=step, random_seed=123, chains=4)
         trace = pm.sample_smc(2000, random_seed=123, parallel=True)  # http://docs.pymc.io/notebooks/SMC2_gaussians.html
-        phase_stats = characterize_posterior(trace, plot=plot, plot_title="joint")
+        phase_stats = characterize_posterior(trace, plot=plot, plot_title=f"joint_{t0_uncorrected.isoformat()}")
         acq["joint_mcmc"] = phase_stats
 
     # loglike = DopplerLogLike(acq, gps_t, ephs)

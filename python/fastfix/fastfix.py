@@ -207,7 +207,8 @@ def phase_fmap(
     for s in svs:
         sim_phase = np.mod(s.codephase(sow, r_0) + offset, 1)
         elevation = s.elevation(sow, r_0)
-
+        
+        # Simulate the expected correlation amplitude
         xmax = 7 + 15 * signal_strength(np.radians(elevation))
         pred_phases.append(sim_phase)
         pred_xmax.append(xmax)
