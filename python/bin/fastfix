@@ -63,16 +63,19 @@ if __name__ == '__main__':
         estimated_clock_offset = (0.0, ARGS.clock_offset_std) # Mean and stdev
         
         for fix in data['fixes']:
-            if (ARGS.n > 0) and (count >= ARGS.n):
-                break
-            if ARGS.mcmc:
-                estimated_clock_offset = fastfix.process_mcmc(fix, start_date, brdc_proxy, local_clock_offset=estimated_clock_offset, plot=ARGS.plot)
-                ret_json['fixes'].append(fix)
-            else:
-                estimated_clock_offset = fastfix.process(fix, start_date, brdc_proxy, estimated_clock_offset=estimated_clock_offset, plot=ARGS.plot)
-                ret_json['fixes'].append(fix)
-            
-            count += 1
+            try:
+                if (ARGS.n > 0) and (count >= ARGS.n):
+                    break
+                if ARGS.mcmc:
+                    estimated_clock_offset = fastfix.process_mcmc(fix, start_date, brdc_proxy, local_clock_offset=estimated_clock_offset, plot=ARGS.plot)
+                    ret_json['fixes'].append(fix)
+                else:
+                    estimated_clock_offset = fastfix.process(fix, start_date, brdc_proxy, estimated_clock_offset=estimated_clock_offset, plot=ARGS.plot)
+                    ret_json['fixes'].append(fix)
+                
+                count += 1
 
-            with open(ARGS.output_file, 'w') as fp:
-                json.dump(ret_json, fp, sort_keys=True, indent=4)
+                with open(ARGS.output_file, 'w') as fp:
+                    json.dump(ret_json, fp, sort_keys=True, indent=4)
+            except Exception:
+                logger.error("Fatal error in main loop", exc_info=True)
