@@ -36,3 +36,11 @@ all:
 
 install:
 	sudo apt install python3-numpy python3-matplotlib python3-scipy python3-pyfftw
+
+test_upload:
+	python3 setup.py sdist
+	twine upload --repository testpypi dist/*
+
+upload:
+	python3 setup.py sdist
+	twine upload --repository pypi dist/*

@@ -11,7 +11,7 @@ with open("README.md") as f:
 
 setup(
     name="fastfix",
-    version="0.1.0b2",
+    version="0.1.0b3",
     description="FastFix Positioning",
     long_description=readme,
     long_description_content_type="text/markdown",
@@ -29,9 +29,8 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Intended Audience :: Science/Research",
     ],
 )
