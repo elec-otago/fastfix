@@ -44,13 +44,20 @@ class Util(object):
             ret = y - (-x) % y
         return ret
 
-    @classmethod
-    def phase_delta(self, x, y):
+    #@classmethod
+    #def phase_delta(self, x, y):
 
-        mu = np.exp(2j*Util.PI*y)
-        z = np.exp(2j*Util.PI*x)
+        #mu = np.exp(2j*Util.PI*y)
+        #z = np.exp(2j*Util.PI*x)
         
-        return np.abs(z - mu) / Util.PI2
+        #return np.abs(z - mu) / Util.PI2
+
+    @classmethod
+    def phase_delta(self, x):
+        ret = self.mod_int(x, 1)
+        if ret > 0.5:
+            ret = 1.0 - ret
+        return ret
 
     @classmethod
     def gaussian_llh(self, x, mu, sigma):

@@ -81,6 +81,8 @@ if __name__ == '__main__':
             print(e)
             pass
     else:
+    
+
         ret, dat = handle_file(ARGS.binfile, ARGS.fc0, ARGS.iq, searchBand=5000)
         with open(ARGS.outfile,'w') as fp:
             json.dump(ret, fp, sort_keys=True, indent=4)

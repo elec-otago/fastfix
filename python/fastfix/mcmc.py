@@ -18,7 +18,7 @@ from .gps_time import GpsTime
 from .location import Location
 from .angle import from_dms
 from .util import Util
-
+from .vmf import VMF
                 
     
 
@@ -223,30 +223,62 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     ph_loglike = PhaseLogLike(acq, gps_t, ephs)
 
     with pm.Model() as model:
-        lat = pm.Uniform("lat", lower=-90.0, upper=90.0, testval=-30.0)
-        lon = pm.Uniform("lon", lower=-180, upper=180.0, testval=60.0)
-        delta_f = pm.Normal("delta_f", mu=0.0, sigma=100.0, testval=0.0)
-        alt = pm.Uniform("alt", lower=0.0, upper=1000.0)
+        if True:
+            lat = pm.VonMises("lat", mu=0, kappa=0.01) * 45 / np.pi
+            lon = pm.VonMises("lon", mu=0, kappa=0.01) * 180 / np.pi
+        else:
+            lonlat = VMF("lonlat", shape=2, testval=np.array([0.0,0.0]))
+            lon = lonlat[0]
+            lat = lonlat[1]
+        
+        delta_f = pm.Normal("delta_f", mu=0.0, sigma=1.0, testval=0.0) * 100
+        alt = pm.HalfNormal("alt", sigma=1.0) * 1000
         offset = pm.Uniform("offset", lower=0, upper=1)
 
-        clk_allowed_range = 2.0 * clock_offset_std + 1.0
-
-        sow = pm.Uniform(
+        sow = pm.Normal(
             "sow",
-            lower=gps_t.sow() - clk_allowed_range,
-            upper=gps_t.sow() + clk_allowed_range,
-        )  # Add half a second as the rtc is only accurate to 1 second.
+            mu=0,
+            sigma= clock_offset_std,
+        ) + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
         theta_do = tt.as_tensor_variable([lat, lon, delta_f])
         theta_ph = tt.as_tensor_variable([lat, lon, alt, offset, sow])
-        like = pm.Potential("like", do_loglike(theta_do) + ph_loglike(theta_ph))
+        like = pm.Potential("like", do_loglike(theta_do))
+        #like = pm.Potential("like", do_loglike(theta_do) + ph_loglike(theta_ph))
         #like = pm.Potential("like", ph_loglike(theta_ph))
     with model:
+        sampler = 'NUTS'
+        n_samples = 2000
+        n_tune = 3000
+        n_chains = 4
+        if sampler == 'MCMC':
+            start = pm.find_MAP()
+            step = pm.Metropolis()
+            idata = pm.sample(n_samples, tune=n_tune, chains=n_chains, step=step, start=start, return_inferencedata=True, discard_tuned_samples=True)
+        if sampler == "DEMZ":
+            start = pm.find_MAP()
+            step = pm.DEMetropolisZ()
+            idata = pm.sample(n_samples, tune=n_tune, chains=n_chains, step=step, start=start, return_inferencedata=True, discard_tuned_samples=True)
+        if sampler == "ADVI":
+            advi_fit = pm.fit(n=2*n_samples, method='fullrank_advi', random_seed=1235,
+                         callbacks=[pm.callbacks.CheckParametersConvergence(diff='relative',tolerance=0.001)])
+            plt.plot(advi_fit.hist)
+            plt.show()
+
+            trace = advi_fit.sample(n_samples)
+            idata = az.from_pymc3(trace)
+        if sampler == "NUTS":
+            if False:
+                idata = pm.sample(n_samples, init='jitter+adapt_full', tune=n_tune, chains=n_chains, return_inferencedata=True, discard_tuned_samples=True)
+            else:
+                start = pm.find_MAP()
+                idata = pm.sample(n_samples, init='advi+adapt_diag', tune=n_tune, chains=n_chains, start=start, return_inferencedata=True, discard_tuned_samples=True)
+
         #step = pm.Metropolis([lat, lon, alt, offset, sow, delta_f])
         #trace = pm.sample(5000, step=step, random_seed=123, chains=4)
-        trace = pm.sample_smc(2000, random_seed=123, parallel=True)  # http://docs.pymc.io/notebooks/SMC2_gaussians.html
-        phase_stats = characterize_posterior(trace, plot=plot, plot_title=f"joint_{t0_uncorrected.isoformat()}")
+        #trace = pm.sample_smc(2000, random_seed=123, parallel=True)  # http://docs.pymc.io/notebooks/SMC2_gaussians.html
+        phase_stats = characterize_posterior(idata, plot=plot, plot_title=f"joint_{t0_uncorrected.isoformat()}")
         acq["joint_mcmc"] = phase_stats
-
+        
     # loglike = DopplerLogLike(acq, gps_t, ephs)
     # with pm.Model() as model:
     # lat = pm.Uniform('lat', lower=-90.0, upper=90.0, testval=-30.0)
