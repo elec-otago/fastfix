@@ -134,7 +134,7 @@ def sub_stats(stat1, stat2, key):
     p1 = stat1[key].to_dict()
     p2 = stat2[key].to_dict()
 
-    p1["lon"] = p2["lon"]
+    p1["lonlat[0]"] = p2["lonlat[0]"]
     return p1
 
 
@@ -148,17 +148,17 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     if plot:
         az.plot_trace(trace)
         plt.savefig(f"{plot_title}_chain_histogram.pdf")
-        # plt.show()
+        plt.show()
 
-        #az.plot_pair(
-            #trace,
+        az.plot_pair(
+            trace,
             #var_names=["lonlat[0]", "lonlat[1]"],
-            #kind="hexbin",
-            #marginals=True,
-            ## figsize=(8, 6),
-        #)
-        #plt.savefig(f"{plot_title}_joint_lat_lon.pdf")
-        # plt.show()
+            kind="hexbin",
+            marginals=True,
+            # figsize=(8, 6),
+        )
+        plt.savefig(f"{plot_title}_joint_lat_lon.pdf")
+        plt.show()
 
     rhat = stats["r_hat"]
 
@@ -170,9 +170,12 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     }
 
     stats = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
-    print(stats["median"]["lonlat[0]"])
+    chain=0
+    position_samples = trace.posterior.get('lonlat').values[chain, :]
+    lon_samples = position_samples[:,0]
+    lon_med = np.mean(lon_samples)
     # Now scale the longitude to have the median at 0.0 (this avoids wraparound at +/- 180.0
-    lon_med = stats["median"]["lonlat[0]"]
+    #lon_med = stats["median"]["lonlat[0]"]
 
     def wrap180(x, med):
         y = x - med
@@ -186,7 +189,7 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     }
 
     stats2 = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
-
+    print(stats2)
     ret = {}
     for key in ["std", "5%", "median", "95%"]:
         ret[key] = sub_stats(stats, stats2, key)
@@ -250,8 +253,8 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         #like = pm.Potential("like", ph_loglike(theta_ph))
     with model:
         sampler = 'NUTS'
-        n_samples = 2000
-        n_tune = 3000
+        n_samples = 200
+        n_tune = 300
         n_chains = 4
         if sampler == 'MCMC':
             start = pm.find_MAP()
