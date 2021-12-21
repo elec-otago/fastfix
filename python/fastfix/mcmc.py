@@ -250,7 +250,9 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         print(f"sigma_fix = {sigma_fix}")
         print(f"kappa = {kappa}")
         
-        lonlat = VMF("lonlat", lon_lat=[170.5, -46.0],  k=kappa, shape=2, testval=np.array([170.5, -46.5]))
+        lon_start = doppler_stats['median']['lonlat[0]']
+        lat_start = doppler_stats['median']['lonlat[1]']
+        lonlat = VMF("lonlat", lon_lat=[lon_start, lat_start],  k=kappa, shape=2, testval=np.array([lon_start, lat_start]))
         lon = lonlat[0]
         lat = lonlat[1]
         
