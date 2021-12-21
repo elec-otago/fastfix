@@ -179,7 +179,7 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
 
     def wrap180(x, med):
         y = x - med
-        return ((y + 180) % 360) - 180 + med
+        return x # ((y + 180) % 360) - 180 + med
 
     func_dict = {
         "std": lambda x: np.std(wrap180(x, lon_med)),
@@ -245,7 +245,7 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     with pm.Model() as model:
 
         ## 1 / kappa = sigma^2 => kappa = 1 / sigma^2 (assume sigma = np.degrees(3))
-        sigma_fix = np.radians(3)
+        sigma_fix = np.radians(doppler_stats['std']['lonlat[0]'])
         kappa = 1 / sigma_fix
         print(f"sigma_fix = {sigma_fix}")
         print(f"kappa = {kappa}")
@@ -314,6 +314,6 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     if (new_sow_err < (clock_offset_std + 0.5)) and (new_sow_err > 1e-3):
         gps_t_uncorrected = GpsTime.from_time(t0_uncorrected)
 
-        clock_offset = phase_stats["sow"]["median"] - gps_t_uncorrected.sow()
-        clock_offset_std = max(float(phase_stats["sow"]["std"]), 0.5)
+        clock_offset = phase_stats["median"]["sow"] - gps_t_uncorrected.sow()
+        clock_offset_std = max(float(phase_stats["std"]["sow"]), 0.5)
     return (clock_offset, clock_offset_std)
