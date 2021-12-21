@@ -244,23 +244,32 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     #### NOW DO THE PHASE FiX
     with pm.Model() as model:
 
-        lonlat = VMF("lonlat", lon_lat=[170.0, -46.0],  k=8, shape=2, testval=np.array([170, -46]))
+        ## 1 / kappa = sigma^2 => kappa = 1 / sigma^2 (assume sigma = np.degrees(3))
+        sigma_fix = np.radians(3)
+        kappa = 20
+        print(f"sigma_fix = {sigma_fix}")
+        print(f"kappa = {kappa}")
+        
+        lonlat = VMF("lonlat", lon_lat=[170.0, -46.0],  k=kappa, shape=2, testval=np.array([170.5, -46.5]))
         lon = lonlat[0]
         lat = lonlat[1]
         
         alt = pm.HalfNormal("alt", sigma=1.0) * 1000
         offset = (pm.VonMises("offset", mu=0, kappa=0.01) / (2*np.pi)) + 0.5
-        sow = pm.VonMises(
-            "sow",
-            mu=0,
-            kappa=0.01,
-        )*(clock_offset_std+0.5) / np.pi + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
+        #sow = pm.VonMises(
+            #"sow",
+            #mu=0,
+            #kappa=0.01,
+        #)*(clock_offset_std+0.5) / np.pi + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
+
+        clk_err = (2*clock_offset_std+0.5)
+        sow = pm.Uniform("sow",  lower=-clk_err, upper=clk_err)  + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
 
         theta_ph = tt.as_tensor_variable([lat, lon, alt, offset, sow])
         like = pm.Potential("like", ph_loglike(theta_ph))
     
     idata = do_mcmc(model)
-    phase_stats = characterize_posterior(idata, plot=plot, plot_title=f"joint_{t0_uncorrected.isoformat()}")
+    phase_stats = characterize_posterior(idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")
     acq["joint_mcmc"] = phase_stats
 
     # loglike = DopplerLogLike(acq, gps_t, ephs)
