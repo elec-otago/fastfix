@@ -148,7 +148,7 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     if plot:
         az.plot_trace(trace)
         plt.savefig(f"{plot_title}_chain_histogram.pdf")
-        plt.show()
+        #plt.show()
 
         az.plot_pair(
             trace,
@@ -158,7 +158,7 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
             # figsize=(8, 6),
         )
         plt.savefig(f"{plot_title}_joint_lat_lon.pdf")
-        plt.show()
+        #plt.show()
 
     rhat = stats["r_hat"]
 
@@ -189,7 +189,20 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     }
 
     stats2 = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
-    return stats2
+    
+    
+    ret = {}
+    for key in ['std', '5%', 'median', '95%']:
+        ret[key] = sub_stats(stats, stats2, key)
+        
+    # now invert
+    ret_swap = {}
+    for k in stats['median'].keys():
+        ret_swap[k] = {'r_hat': rhat[k] }
+        for k2 in ['std', '5%', 'median', '95%']:
+            ret_swap[k][k2] = ret[k2][k]
+
+    return ret_swap
 
 def do_mcmc(model, n_samples=3000):
     with model:
@@ -237,7 +250,7 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         like = pm.Potential("like", do_loglike(theta_do))
     
     idata = do_mcmc(model, n_samples=500)
-    doppler_stats = characterize_posterior(idata, plot=plot, plot_title=f"joint_{t0_uncorrected.isoformat()}")
+    doppler_stats = characterize_posterior(idata, plot=plot, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
     acq["doppler_mcmc"] = doppler_stats
     
     
@@ -245,13 +258,13 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     with pm.Model() as model:
 
         ## 1 / kappa = sigma^2 => kappa = 1 / sigma^2 (assume sigma = np.degrees(3))
-        sigma_fix = np.radians(doppler_stats['std']['lonlat[0]'])
+        sigma_fix = np.radians(doppler_stats['lonlat[0]']['std'])
         kappa = 1 / sigma_fix
         print(f"sigma_fix = {sigma_fix}")
         print(f"kappa = {kappa}")
         
-        lon_start = doppler_stats['median']['lonlat[0]']
-        lat_start = doppler_stats['median']['lonlat[1]']
+        lon_start = doppler_stats['lonlat[0]']['std']
+        lat_start = doppler_stats['lonlat[1]']['median']
         lonlat = VMF("lonlat", lon_lat=[lon_start, lat_start],  k=kappa, shape=2, testval=np.array([lon_start, lat_start]))
         lon = lonlat[0]
         lat = lonlat[1]
@@ -316,6 +329,6 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     if (new_sow_err < (clock_offset_std + 0.5)) and (new_sow_err > 1e-3):
         gps_t_uncorrected = GpsTime.from_time(t0_uncorrected)
 
-        clock_offset = phase_stats["median"]["sow"] - gps_t_uncorrected.sow()
-        clock_offset_std = max(float(phase_stats["std"]["sow"]), 0.5)
+        clock_offset = phase_stats["sow"]["median"] - gps_t_uncorrected.sow()
+        clock_offset_std = max(float(phase_stats["sow"]["std"]), 0.5)
     return (clock_offset, clock_offset_std)
