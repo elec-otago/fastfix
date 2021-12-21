@@ -86,14 +86,14 @@ d2r = 180 / np.pi
 def vmf_logp(lon_lat, k, x):
 
     if x[1] < -90. or x[1] > 90.:
-        raise ZeroProbability
-        return -np.inf
+        #raise pm.ZeroProbability
+        return np.array(-np.inf)
     if k < eps:
         return np.log(1. / 4. / np.pi)
     theta = angle(x, lon_lat)[0]
     PdA = k*np.exp(k*np.cos(theta*d2r))/(2*np.pi*(np.exp(k)-np.exp(-k)))
     logp = np.log(PdA)
-    return logp
+    return np.array(logp)
 
 
 class VMF(pm.Continuous):

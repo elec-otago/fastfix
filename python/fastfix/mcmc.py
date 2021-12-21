@@ -141,20 +141,23 @@ def sub_stats(stat1, stat2, key):
 def characterize_posterior(trace, plot=False, plot_title="trace"):
     stats = pm.summary(trace)
     print(stats.to_string())
-
+    print(trace)
+    names = [x for x in trace.posterior.mean()]
+    print(f"Names:  {names}")
+    
     if plot:
         az.plot_trace(trace)
         plt.savefig(f"{plot_title}_chain_histogram.pdf")
         # plt.show()
 
-        az.plot_pair(
-            trace,
-            var_names=["lat", "lon"],
-            kind="hexbin",
-            marginals=True,
-            # figsize=(8, 6),
-        )
-        plt.savefig(f"{plot_title}_joint_lat_lon.pdf")
+        #az.plot_pair(
+            #trace,
+            #var_names=["lonlat[0]", "lonlat[1]"],
+            #kind="hexbin",
+            #marginals=True,
+            ## figsize=(8, 6),
+        #)
+        #plt.savefig(f"{plot_title}_joint_lat_lon.pdf")
         # plt.show()
 
     rhat = stats["r_hat"]
@@ -167,9 +170,9 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     }
 
     stats = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
-
+    print(stats["median"]["lonlat[0]"])
     # Now scale the longitude to have the median at 0.0 (this avoids wraparound at +/- 180.0
-    lon_med = stats["median"]["lon"]
+    lon_med = stats["median"]["lonlat[0]"]
 
     def wrap180(x, med):
         y = x - med
@@ -223,11 +226,11 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     ph_loglike = PhaseLogLike(acq, gps_t, ephs)
 
     with pm.Model() as model:
-        if True:
+        if False:
             lat = pm.VonMises("lat", mu=0, kappa=0.01) * 45 / np.pi
             lon = pm.VonMises("lon", mu=0, kappa=0.01) * 180 / np.pi
         else:
-            lonlat = VMF("lonlat", shape=2, testval=np.array([0.0,0.0]))
+            lonlat = VMF("lonlat", k=0.01, shape=2, testval=np.array([0.0,0.0]))
             lon = lonlat[0]
             lat = lonlat[1]
         

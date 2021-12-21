@@ -78,3 +78,4 @@ A full dataset including test data is available at doi:10.5281/zenodo.4266994.
 ## Changelog
 
 * 0.1.0b3 Initial Release
+* 0.2.0b1 Add VonMises distributions for the MCMC.
