@@ -324,9 +324,7 @@ class Ephemeris(object):
         tk = Util.check_t(
             sow - self.toe
         )  #        Time from ephemeris reference epoch (1)
-        if tk < -302400.0:
-            raise RuntimeError(f"Invalid time {sow}, toe={self.toe}")
-        if tk > 302400.0:
+        if (tk < -302400.0) or ( tk > 302400.0):
             raise RuntimeError(f"Invalid time {sow}, toe={self.toe}")
         return tk
 

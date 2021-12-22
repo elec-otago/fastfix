@@ -2,12 +2,52 @@ import pymc3 as pm
 import numpy as np
 import theano.tensor as tt
 from theano.compile.ops import as_op
-
+from pymc3.distributions import draw_values, generate_samples
 from scipy.spatial.transform import Rotation as R
 
 def construct_euler_rotation_matrix(alpha, beta, gamma):
     r = R.from_euler('zyx', [alpha, beta, gamma], degrees=True)
     return r.as_matrix()
+
+
+def cart2dir(cart):
+    """
+    Converts a direction in cartesian coordinates into declination, inclinations
+    Parameters
+    ----------
+    cart : input list of [x,y,z] or list of lists [[x1,y1,z1],[x2,y2,z2]...]
+    Returns
+    -------
+    direction_array : returns an array of [declination, inclination, intensity]
+    Examples
+    --------
+    >>> pmag.cart2dir([0,1,0])
+    array([ 90.,   0.,   1.])
+    """
+    cart = np.array(cart)
+    rad = np.pi / 180.  # constant to convert degrees to radians
+    if len(cart.shape) > 1:
+        Xs, Ys, Zs = cart[:, 0], cart[:, 1], cart[:, 2]
+    else:  # single vector
+        Xs, Ys, Zs = cart[0], cart[1], cart[2]
+    if np.iscomplexobj(Xs):
+        Xs = Xs.real
+    if np.iscomplexobj(Ys):
+        Ys = Ys.real
+    if np.iscomplexobj(Zs):
+        Zs = Zs.real
+    Rs = np.sqrt(Xs**2 + Ys**2 + Zs**2)  # calculate resultant vector length
+    # calculate declination taking care of correct quadrants (arctan2) and
+    # making modulo 360.
+    Decs = (np.arctan2(Ys, Xs) / rad) % 360.
+    try:
+        # calculate inclination (converting to degrees) #
+        Incs = np.arcsin((Zs / Rs)) / rad
+    except:
+        print('trouble in cart2dir')  # most likely division by zero somewhere
+        return np.zeros(3)
+
+    return np.array([Decs, Incs, Rs]).transpose()  # return the directions list
 
 def dir2cart(d):
     """
@@ -115,7 +155,8 @@ class VMF(pm.Continuous):
 
 
     def _random(self, lon_lat, k, size = None):
-
+        r2d = np.degrees(1)
+        
         alpha = 0.
         beta = np.pi / 2. - lon_lat[1] * d2r
         gamma = lon_lat[0] * d2r

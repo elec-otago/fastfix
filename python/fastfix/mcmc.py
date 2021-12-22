@@ -177,15 +177,14 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     # Now scale the longitude to have the median at 0.0 (this avoids wraparound at +/- 180.0
     #lon_med = stats["median"]["lonlat[0]"]
 
-    def wrap180(x, med):
-        y = x - med
-        return x # ((y + 180) % 360) - 180 + med
+    def wrap180(x):
+        return ((x + 180) % 360) - 180
 
     func_dict = {
-        "std": lambda x: np.std(wrap180(x, lon_med)),
-        "5%": lambda x: np.percentile(wrap180(x, lon_med), 5),
-        "median": lambda x: np.percentile(wrap180(x, lon_med), 50),
-        "95%": lambda x: np.percentile(wrap180(x, lon_med), 95),
+        "std": lambda x: np.std(x),
+        "5%": lambda x: np.percentile(wrap180(x), 5),
+        "median": lambda x: np.percentile(wrap180(x), 50),
+        "95%": lambda x: np.percentile(wrap180(x), 95),
     }
 
     stats2 = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
@@ -204,12 +203,15 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
 
     return ret_swap
 
-def do_mcmc(model, n_samples=3000):
+def do_mcmc(model, n_samples=3000, method='NUTS'):
     with model:
         n_tune = n_samples
         n_chains = 4
-        start = pm.find_MAP()
-        idata = pm.sample(n_samples, init='advi+adapt_diag', tune=n_tune, chains=n_chains, start=start, return_inferencedata=True, discard_tuned_samples=True)
+        if method == 'NUTS':
+            start = pm.find_MAP()
+            idata = pm.sample(n_samples, init='advi+adapt_diag', tune=n_tune, chains=n_chains, start=start, return_inferencedata=True, discard_tuned_samples=True)
+        else:
+            idata = pm.sample_smc(n_samples, parallel=True)
 
     return idata
     
@@ -244,33 +246,43 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         lon = lonlat[0]
         lat = lonlat[1]
         
-        delta_f = pm.Normal("delta_f", mu=0.0, sigma=1.0, testval=0.0) * 100
+        delta_f = pm.Normal("delta_f_khz", mu=0.0, sigma=1.0, testval=0.0) * 1000
 
         theta_do = tt.as_tensor_variable([lat, lon, delta_f])
         like = pm.Potential("like", do_loglike(theta_do))
     
-    idata = do_mcmc(model, n_samples=500)
+    idata = do_mcmc(model, n_samples=1000)
     doppler_stats = characterize_posterior(idata, plot=plot, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
     acq["doppler_mcmc"] = doppler_stats
-    
+    print(doppler_stats)
     
     #### NOW DO THE PHASE FiX
     with pm.Model() as model:
 
         ## 1 / kappa = sigma^2 => kappa = 1 / sigma^2 (assume sigma = np.degrees(3))
-        sigma_fix = np.radians(doppler_stats['lonlat[0]']['std'])
-        kappa = 1 / sigma_fix
+        sigma_fix = doppler_stats['lonlat[0]']['std']
+        kappa = 0.1 / np.radians(sigma_fix)**2
         print(f"sigma_fix = {sigma_fix}")
         print(f"kappa = {kappa}")
         
-        lon_start = doppler_stats['lonlat[0]']['std']
+        lon_start = doppler_stats['lonlat[0]']['median']
         lat_start = doppler_stats['lonlat[1]']['median']
-        lonlat = VMF("lonlat", lon_lat=[lon_start, lat_start],  k=kappa, shape=2, testval=np.array([lon_start, lat_start]))
-        lon = lonlat[0]
-        lat = lonlat[1]
+        
+        print(f"lonlat_start = {[lon_start, lat_start]}")
+        
+        if False:
+            lonlat = VMF("lonlat", lon_lat=[lon_start, lat_start],  k=kappa, shape=2, testval=np.array([lon_start, lat_start]))
+            lon = lonlat[0]
+            lat = lonlat[1]
+        else:
+            lon = pm.Normal('lonlat[0]', mu = lon_start, sigma=doppler_stats['lonlat[0]']['std'])
+            lat = pm.Normal('lonlat[1]', mu = lat_start, sigma=doppler_stats['lonlat[1]']['std'])
         
         alt = pm.HalfNormal("alt", sigma=1.0) * 1000
-        offset = pm.Uniform("phase_offset", lower=0, upper=1)
+        if False:
+            offset = pm.Uniform("phase_offset", lower=0, upper=1)
+        else:
+            offset = (pm.VonMises("phase_offset", mu=0, kappa=0.01) + np.pi) / (2*np.pi)
         #sow = pm.VonMises(
             #"sow",
             #mu=0,
@@ -278,57 +290,26 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         #)*(clock_offset_std+0.5) / np.pi + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
 
         clk_err = (2*clock_offset_std+0.5)
-        sow = pm.Uniform("sow",  lower=-clk_err, upper=clk_err)  + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
+        sow = pm.Uniform("sow_offset",  lower=-clk_err, upper=clk_err)  + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
 
         theta_ph = tt.as_tensor_variable([lat, lon, alt, offset, sow])
         phase_like = pm.Potential("phase_like", ph_loglike(theta_ph))
     
-    idata = do_mcmc(model, n_samples=1000)
+    idata = do_mcmc(model, n_samples=5000, method='SGD')
     phase_stats = characterize_posterior(idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")
-    acq["joint_mcmc"] = phase_stats
+    acq["phase_mcmc"] = phase_stats
 
-    # loglike = DopplerLogLike(acq, gps_t, ephs)
-    # with pm.Model() as model:
-    # lat = pm.Uniform('lat', lower=-90.0, upper=90.0, testval=-30.0)
-    # lon = pm.Uniform('lon', lower=-180, upper=180.0, testval=60.0)
-    # delta_f = pm.Normal('delta_f', mu=0.0, sigma=100.0, testval=0.0)
-    # theta = tt.as_tensor_variable([lat, lon, delta_f])
-    # like = pm.Potential('like', loglike(theta))
-    # with model:
-    # trace = pm.sample(1000)
-
-    # doppler_stats = characterize_posterior(trace, plot=plot, plot_title="doppler")
-    # acq['doppler_mcmc'] = doppler_stats
-    # logger.info(doppler_stats)
-
-    # loglike = PhaseLogLike(acq, gps_t, ephs)
-    # with pm.Model() as model:
-    # lat = pm.Normal('lat', mu=doppler_stats['lat']['median'], sigma = doppler_stats['lat']['std'])
-    # lon = pm.Normal('lon', mu=doppler_stats['lon']['median'], sigma = doppler_stats['lon']['std'])
-    # alt = pm.Uniform('alt', lower=0.0, upper=1000.0)
-    # offset = pm.Uniform('offset', lower=0, upper=1)
-
-    # clk_allowed_range = 2.0*clock_offset_std + 1.0
-
-    # sow = pm.Uniform('sow', lower=gps_t.sow() - clk_allowed_range, upper=gps_t.sow() + clk_allowed_range)   # Add half a second as the rtc is only accurate to 1 second.
-    # theta = tt.as_tensor_variable([lat, lon, alt, offset, sow])
-    # like = pm.Potential('like', loglike(theta))
-    # with model:
-    # step1 = pm.Slice([lat, lon, sow])
-    # step2 = pm.Metropolis([alt, offset])
-    ##step = pm.DEMetropolis()
-    ##step = pm.DEMetropolisZ()  # Cajo C.F. ter Braak (2006). Differential Evolution Markov Chain with snooker updater and fewer chains. Statistics and Computing
-    ##step = pm.Slice()  # Cajo C.F. ter Braak (2006). Differential Evolution Markov Chain with snooker updater and fewer chains. Statistics and Computing
-
-    # trace = pm.sample(1000, step = [step1, step2], random_seed=123, chains=4)
-    # phase_stats = characterize_posterior(trace, plot=plot, plot_title="phase")
-    # acq['phase_mcmc'] = phase_stats
+    ## RAW FIX HERE...
+    
+    
+    
+    ## CLEANUP
 
     print(phase_stats)
-    new_sow_err = 1.0 #phase_stats["sow"]["std"]
+    new_sow_err = phase_stats["sow_offset"]["std"]
     if (new_sow_err < (clock_offset_std + 0.5)) and (new_sow_err > 1e-3):
         gps_t_uncorrected = GpsTime.from_time(t0_uncorrected)
 
-        clock_offset = phase_stats["sow"]["median"] - gps_t_uncorrected.sow()
-        clock_offset_std = max(float(phase_stats["sow"]["std"]), 0.5)
+        clock_offset = phase_stats["sow_offset"]["median"]
+        clock_offset_std = max(float(phase_stats["sow_offset"]["std"]), 0.5)
     return (clock_offset, clock_offset_std)
