@@ -142,8 +142,6 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     stats = pm.summary(trace)
     print(stats.to_string())
     print(trace)
-    names = [x for x in trace.posterior.mean()]
-    print(f"Names:  {names}")
     
     if plot:
         az.plot_trace(trace)
@@ -211,7 +209,8 @@ def do_mcmc(model, n_samples=3000, method='NUTS'):
             start = pm.find_MAP()
             idata = pm.sample(n_samples, init='advi+adapt_diag', tune=n_tune, chains=n_chains, start=start, return_inferencedata=True, discard_tuned_samples=True)
         else:
-            idata = pm.sample_smc(n_samples, parallel=True)
+            trace = pm.sample_smc(n_samples, parallel=True)
+            idata = az.data.convert_to_inference_data(trace)
 
     return idata
     
