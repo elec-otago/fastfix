@@ -31,18 +31,18 @@ if __name__ == '__main__':
     fh.setLevel(logging.INFO)
     
     # create console handler and set level to debug
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
+    #ch = logging.StreamHandler()
+    #ch.setLevel(logging.INFO)
 
     # create formatter
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     # add formatter to ch
-    ch.setFormatter(formatter)
+    #ch.setFormatter(formatter)
     fh.setFormatter(formatter)
 
     # add ch to logger
-    logger.addHandler(ch)
+    #logger.addHandler(ch)
     logger.addHandler(fh)
     
 

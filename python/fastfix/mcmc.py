@@ -168,12 +168,6 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     }
 
     stats = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
-    chain=0
-    position_samples = trace.posterior.get('lonlat').values[chain, :]
-    lon_samples = position_samples[:,0]
-    lon_med = np.mean(lon_samples)
-    # Now scale the longitude to have the median at 0.0 (this avoids wraparound at +/- 180.0
-    #lon_med = stats["median"]["lonlat[0]"]
 
     def wrap180(x):
         return ((x + 180) % 360) - 180
@@ -223,7 +217,7 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     t0_uncorrected = start_date + datetime.timedelta(seconds=rtc_offset)
     t0 = start_date + datetime.timedelta(seconds=rtc_offset + clock_offset)
 
-    logger.info(
+    print(
         f"FastFix MCMC processing: t0={t0.isoformat()} offset={local_clock_offset}"
     )
     acq["t0"] = t0.isoformat()
@@ -288,13 +282,13 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
             #kappa=0.01,
         #)*(clock_offset_std+0.5) / np.pi + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
 
-        clk_err = (2*clock_offset_std+0.5)
+        clk_err = (clock_offset_std+0.5)
         sow = pm.Uniform("sow_offset",  lower=-clk_err, upper=clk_err)  + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
 
         theta_ph = tt.as_tensor_variable([lat, lon, alt, offset, sow])
         phase_like = pm.Potential("phase_like", ph_loglike(theta_ph))
     
-    idata = do_mcmc(model, n_samples=5000, method='SGD')
+    idata = do_mcmc(model, n_samples=5000, method='NUTS')
     phase_stats = characterize_posterior(idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")
     acq["phase_mcmc"] = phase_stats
 
