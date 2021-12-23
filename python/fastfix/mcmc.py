@@ -302,7 +302,7 @@ def phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, eph
         phase_like = pm.Potential("phase_like", ph_loglike(theta_ph))
     
         n_draws = 3000
-        if False:
+        if True:
             start = pm.find_MAP()
             n_tune = n_draws
             idata = pm.sample(draws=n_draws, init='advi+adapt_diag', tune=n_tune, start=start, return_inferencedata=True, discard_tuned_samples=True)
@@ -364,6 +364,6 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     if (new_sow_err < (clock_offset_std + 0.5)) and (new_sow_err > 1e-3):
         gps_t_uncorrected = GpsTime.from_time(t0_uncorrected)
 
-        clock_offset = phase_stats["sow_offset"]["median"]
+        clock_offset = clock_offset + phase_stats["sow_offset"]["median"]
         clock_offset_std = max(float(phase_stats["sow_offset"]["std"]), 0.5)
     return (clock_offset, clock_offset_std)
