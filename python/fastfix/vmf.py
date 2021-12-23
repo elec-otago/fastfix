@@ -126,8 +126,8 @@ def angle(D1, D2):
 def vmf_logp(lon_lat, k, x):
 
     if x[1] < -90. or x[1] > 90.:
-        raise RuntimeError(f"Value out of range {x}")
-        return np.array(-np.inf)
+        #raise RuntimeError(f"Value out of range {x}")
+        return np.array(-1e6) # np.array(-np.inf)
     if k < eps:
         return np.log(1. / 4. / np.pi)
     theta = angle(x, lon_lat)[0]
