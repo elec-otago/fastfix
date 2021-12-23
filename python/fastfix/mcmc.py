@@ -330,9 +330,10 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     t0_uncorrected = start_date + datetime.timedelta(seconds=rtc_offset)
     t0 = start_date + datetime.timedelta(seconds=rtc_offset + clock_offset)
 
-    print(
-        f"FastFix MCMC processing: t0={t0.isoformat()} offset={local_clock_offset}"
-    )
+    print("##########################################################")
+    print("")
+    print(f"FastFix MCMC processing: t0={t0.isoformat()} offset={local_clock_offset}")
+    print("")
     acq["t0"] = t0.isoformat()
     acq["local_t0"] = t0_uncorrected.isoformat()
     acq["local_clock_offset"] = local_clock_offset
