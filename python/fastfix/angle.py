@@ -28,13 +28,15 @@ def wrap_180(x):
         r -= 360.0
     return r
 
+def d2r(x):
+    return x * TWO_PI / 360.0
 
 # from functools import total_ordering
 # @total_ordering
 class Angle(object):
     def __init__(self, deg=0, minute=0, sec=0):
         dec_deg = deg + float(minute) / 60.0 + float(sec) / 3600.0
-        self.rad = np.radians(dec_deg)
+        self.rad = d2r(dec_deg)
 
     def __repr__(self):
         return str(self.to_degrees())
@@ -58,7 +60,7 @@ class Angle(object):
         return self.rad
 
     def to_degrees(self):
-        return np.degrees(self.rad)
+        return (self.rad * 360 / TWO_PI)
 
     def to_hours(self):
         return wrap_2pi(self.rad) * (24.0 / TWO_PI)

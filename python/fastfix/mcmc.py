@@ -49,10 +49,10 @@ class PhaseLogLike(tt.Op):
                 self.data, pred_phases, self.xmax, pred_xmax
             ):
                 sigma = 0.05
-                #if meas_xm > 12:
-                    #sigma = 0.0002  # Should be close to one sample which is 1/8k
-                #if pred_xm < 8.0 or meas_xm < 8.0:
-                    #sigma = 2.0  # These should be ignored, therefore a huge variance.
+                if meas_xm > 12:
+                    sigma = 0.02  # Should be close to one sample which is 1/8k
+                if pred_xm < 8.0 or meas_xm < 8.0:
+                    sigma = 2.0  # These should be ignored, therefore a huge variance.
 
                 logp += Util.gaussian_llh(x=meas_ph, mu=pred_ph, sigma=sigma)
                 
@@ -195,42 +195,24 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
 
     return ret_swap
 
-def do_mcmc(model, n_samples=3000, method='NUTS'):
-    with model:
-        n_tune = n_samples
-        n_chains = 4
-        if method == 'NUTS':
-            start = pm.find_MAP()
-            idata = pm.sample(n_samples, init='advi+adapt_diag', tune=n_tune, chains=n_chains, start=start, return_inferencedata=True, discard_tuned_samples=True)
-        else:
-            trace = pm.sample_smc(n_samples, parallel=True)
-            idata = az.data.convert_to_inference_data(trace)
+
+    
+def do_mcmc(n_samples=3000, method='NUTS'):
+    n_tune = n_samples
+    n_chains = 4
+    if method == 'NUTS':
+        start = pm.find_MAP()
+        idata = pm.sample(n_samples, init='advi+adapt_diag', tune=n_tune, chains=n_chains, start=start, return_inferencedata=True, discard_tuned_samples=True)
+    else:
+        trace = pm.sample_smc(n_samples, parallel=True)
+        idata = az.data.convert_to_inference_data(trace)
 
     return idata
-    
-def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
 
-    clock_offset, clock_offset_std = local_clock_offset
+import concurrent.futures
 
-    rtc_offset = acq["rtc"]
-
-    t0_uncorrected = start_date + datetime.timedelta(seconds=rtc_offset)
-    t0 = start_date + datetime.timedelta(seconds=rtc_offset + clock_offset)
-
-    print(
-        f"FastFix MCMC processing: t0={t0.isoformat()} offset={local_clock_offset}"
-    )
-    acq["t0"] = t0.isoformat()
-    acq["local_t0"] = t0_uncorrected.isoformat()
-    acq["local_clock_offset"] = local_clock_offset
-
-    ephs = brdc_proxy.get_ephemerides(t0)
-
-    gps_t = GpsTime.from_time(t0)
-    acq["gps_t"] = gps_t.to_dict()
-
+def doppler_model(t0_uncorrected, acq, gps_t, ephs):
     do_loglike = DopplerLogLike(acq, gps_t, ephs)
-    ph_loglike = PhaseLogLike(acq, gps_t, ephs)
 
     #### DO THE DOPPLER FiX
     with pm.Model() as model:
@@ -244,20 +226,24 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         theta_do = tt.as_tensor_variable([lat, lon, delta_f])
         like = pm.Potential("like", do_loglike(theta_do))
     
-    idata = do_mcmc(model, n_samples=1000)
-    doppler_stats = characterize_posterior(idata, plot=plot, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
-    acq["doppler_mcmc"] = doppler_stats
-    print(doppler_stats)
+        start = pm.find_MAP()
+        idata = pm.sample(draws=500, init='jitter+adapt_full', tune=500, chains=4, \
+            start=start, return_inferencedata=True, discard_tuned_samples=True)
     
-    #### NOW DO THE PHASE FiX
+    doppler_stats = characterize_posterior(idata, plot=True, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
+    return doppler_stats
+
+def run_doppler_model(*args, **kwargs):
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(doppler_model, *args, **kwargs)
+        return future.result()
+
+
+def phase_model(doppler_stats, clock_offset_std, acq, gps_t, ephs):
+    ph_loglike = PhaseLogLike(acq, gps_t, ephs)
     with pm.Model() as model:
 
         ## 1 / kappa = sigma^2 => kappa = 1 / sigma^2 (assume sigma = np.degrees(3))
-        sigma_fix = doppler_stats['lonlat[0]']['std']
-        kappa = 0.1 / np.radians(sigma_fix)**2
-        print(f"sigma_fix = {sigma_fix}")
-        print(f"kappa = {kappa}")
-        
         lon_start = doppler_stats['lonlat[0]']['median']
         lat_start = doppler_stats['lonlat[1]']['median']
         
@@ -286,10 +272,53 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
         sow = pm.Uniform("sow_offset",  lower=-clk_err, upper=clk_err)  + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
 
         theta_ph = tt.as_tensor_variable([lat, lon, alt, offset, sow])
+        
         phase_like = pm.Potential("phase_like", ph_loglike(theta_ph))
     
-    idata = do_mcmc(model, n_samples=5000, method='NUTS')
+        idata = do_mcmc(n_samples=1000, method='NUTS')
+        #trace = pm.sample_smc(draws=1000, parallel=True)
+        #idata = az.data.convert_to_inference_data(trace)
+
     phase_stats = characterize_posterior(idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")
+    return phase_stats
+
+def run_phase_model(*args, **kwargs):
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(phase_model, *args, **kwargs)
+        return future.result()
+
+def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
+
+    clock_offset, clock_offset_std = local_clock_offset
+
+    rtc_offset = acq["rtc"]
+
+    t0_uncorrected = start_date + datetime.timedelta(seconds=rtc_offset)
+    t0 = start_date + datetime.timedelta(seconds=rtc_offset + clock_offset)
+
+    print(
+        f"FastFix MCMC processing: t0={t0.isoformat()} offset={local_clock_offset}"
+    )
+    acq["t0"] = t0.isoformat()
+    acq["local_t0"] = t0_uncorrected.isoformat()
+    acq["local_clock_offset"] = local_clock_offset
+
+    ephs = brdc_proxy.get_ephemerides(t0)
+
+    gps_t = GpsTime.from_time(t0)
+    acq["gps_t"] = gps_t.to_dict()
+
+    #do_loglike = DopplerLogLike(acq, gps_t, ephs)
+
+    ##### DO THE DOPPLER FiX
+    doppler_stats = run_doppler_model(t0_uncorrected, acq, gps_t, ephs)
+
+    acq["doppler_mcmc"] = doppler_stats
+    print(doppler_stats)
+    
+    #### NOW DO THE PHASE FiX
+    
+    phase_stats = run_phase_model(doppler_stats, clock_offset_std, acq, gps_t, ephs)
     acq["phase_mcmc"] = phase_stats
 
     ## RAW FIX HERE...
