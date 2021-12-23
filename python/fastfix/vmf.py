@@ -149,7 +149,6 @@ class VMF(pm.Continuous):
         print(f"init({lon_lat})")
 
     def logp(self, value):
-        print(f"logp({value}, {self._lon_lat}")
         lon_lat = self._lon_lat
         k = self._k
         value = tt.as_tensor_variable(value)
@@ -157,7 +156,6 @@ class VMF(pm.Continuous):
 
 
     def _random(self, lon_lat, k, size = None):
-        print(f"random({lon_lat})")
         alpha = 0.
         beta = np.pi / 2. - lon_lat[1] * d2r
         gamma = lon_lat[0] * d2r

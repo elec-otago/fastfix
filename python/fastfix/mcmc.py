@@ -211,7 +211,7 @@ def do_mcmc(n_samples=3000, method='NUTS'):
 
 import concurrent.futures
 
-def doppler_model(t0_uncorrected, acq, gps_t, ephs):
+def doppler_model(t0_uncorrected, acq, gps_t, ephs, plot):
     do_loglike = DopplerLogLike(acq, gps_t, ephs)
 
     #### DO THE DOPPLER FiX
@@ -227,10 +227,10 @@ def doppler_model(t0_uncorrected, acq, gps_t, ephs):
         like = pm.Potential("like", do_loglike(theta_do))
     
         start = pm.find_MAP()
-        idata = pm.sample(draws=500, init='jitter+adapt_full', tune=500, chains=4, \
+        idata = pm.sample(draws=500, init='advi+adapt_diag', tune=500, chains=4, \
             start=start, return_inferencedata=True, discard_tuned_samples=True)
     
-    doppler_stats = characterize_posterior(idata, plot=True, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
+    doppler_stats = characterize_posterior(idata, plot=plot, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
     return doppler_stats
 
 def run_doppler_model(*args, **kwargs):
@@ -239,7 +239,7 @@ def run_doppler_model(*args, **kwargs):
         return future.result()
 
 
-def phase_model(doppler_stats, clock_offset_std, acq, gps_t, ephs):
+def phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, ephs, plot):
     ph_loglike = PhaseLogLike(acq, gps_t, ephs)
     with pm.Model() as model:
 
@@ -275,9 +275,12 @@ def phase_model(doppler_stats, clock_offset_std, acq, gps_t, ephs):
         
         phase_like = pm.Potential("phase_like", ph_loglike(theta_ph))
     
-        idata = do_mcmc(n_samples=1000, method='NUTS')
-        #trace = pm.sample_smc(draws=1000, parallel=True)
-        #idata = az.data.convert_to_inference_data(trace)
+        if True:
+            start = pm.find_MAP()
+            idata = pm.sample(draws=1000, init='advi+adapt_diag', tune=n_tune, chains=n_chains, start=start, return_inferencedata=True, discard_tuned_samples=True)
+        else:
+            trace = pm.sample_smc(draws=1000, parallel=True)
+            idata = az.data.convert_to_inference_data(trace)
 
     phase_stats = characterize_posterior(idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")
     return phase_stats
@@ -286,6 +289,9 @@ def run_phase_model(*args, **kwargs):
     with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
         future = executor.submit(phase_model, *args, **kwargs)
         return future.result()
+
+
+
 
 def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
 
@@ -308,17 +314,15 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
     gps_t = GpsTime.from_time(t0)
     acq["gps_t"] = gps_t.to_dict()
 
-    #do_loglike = DopplerLogLike(acq, gps_t, ephs)
-
     ##### DO THE DOPPLER FiX
-    doppler_stats = run_doppler_model(t0_uncorrected, acq, gps_t, ephs)
+    doppler_stats = run_doppler_model(t0_uncorrected, acq, gps_t, ephs, plot)
 
     acq["doppler_mcmc"] = doppler_stats
     print(doppler_stats)
     
     #### NOW DO THE PHASE FiX
     
-    phase_stats = run_phase_model(doppler_stats, clock_offset_std, acq, gps_t, ephs)
+    phase_stats = run_phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, ephs, plot)
     acq["phase_mcmc"] = phase_stats
 
     ## RAW FIX HERE...
