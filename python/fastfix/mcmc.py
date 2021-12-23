@@ -4,6 +4,8 @@ import datetime
 import logging
 import numpy as np
 import pymc3 as pm
+
+import theano
 import theano.tensor as tt
 
 # import theano.tests.unittest_tools as utt
@@ -20,7 +22,29 @@ from .angle import from_dms
 from .util import Util
 from .vmf import VMF
                 
-    
+from theano import config
+
+
+def clear_theano_cache():
+    # We skip the refresh on module cache creation because the refresh will
+    # be done when calling clear afterwards.
+    cache = get_module_cache(init_args=dict(do_refresh=False))
+    cache.clear(unversioned_min_age=-1, clear_base_files=True,
+                delete_if_problem=True)
+
+    # Print a warning if some cached modules were not removed, so that the
+    # user knows he should manually delete them, or call
+    # theano-cache purge, # to properly clear the cache.
+    items = [item for item in sorted(os.listdir(cache.dirname))
+                if item.startswith('tmp')]
+    if items:
+        raise RuntimeError(
+            'There remain elements in the cache dir that you may '
+            'need to erase manually. The cache dir is:\n  %s\n'
+            'You can also call "theano-cache purge" to '
+            'remove everything from that directory.' %
+            config.compiledir)
+        _logger.debug(f"Remaining elements ({len(items)}): {', '.join(items)}")
 
 class PhaseLogLike(tt.Op):
     itypes = [tt.dvector]
@@ -138,11 +162,9 @@ def sub_stats(stat1, stat2, key):
     return p1
 
 
-def characterize_posterior(trace, plot=False, plot_title="trace"):
+def characterize_posterior(model_name, trace, plot=False, plot_title="trace"):
     stats = pm.summary(trace)
     print(stats.to_string())
-    print(trace)
-    
     if plot:
         az.plot_trace(trace)
         plt.savefig(f"{plot_title}_chain_histogram.pdf")
@@ -169,6 +191,11 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
 
     stats = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
 
+    name_len = len(model_name)
+
+    def clean_key(k):
+        return k[name_len+1:]
+    
     def wrap180(x):
         return ((x + 180) % 360) - 180
 
@@ -184,14 +211,22 @@ def characterize_posterior(trace, plot=False, plot_title="trace"):
     
     ret = {}
     for key in ['std', '5%', 'median', '95%']:
-        ret[key] = sub_stats(stats, stats2, key)
+        p1 = stats[key].to_dict()
+        p2 = stats2[key].to_dict()
+
+        lon_name = f"{model_name}_lonlat[0]"
+        p1[lon_name] = p2[lon_name]
+
+        ret[key] = p1
         
     # now invert
     ret_swap = {}
-    for k in stats['median'].keys():
-        ret_swap[k] = {'r_hat': rhat[k] }
+    for key in stats['median'].keys():
+        k = clean_key(key)
+        print(f"{key} -> {k}")
+        ret_swap[k] = {'r_hat': rhat[key] }
         for k2 in ['std', '5%', 'median', '95%']:
-            ret_swap[k][k2] = ret[k2][k]
+            ret_swap[k][k2] = ret[k2][key]
 
     return ret_swap
 
@@ -212,12 +247,13 @@ def do_mcmc(n_samples=3000, method='NUTS'):
 import concurrent.futures
 
 def doppler_model(t0_uncorrected, acq, gps_t, ephs, plot):
+
     do_loglike = DopplerLogLike(acq, gps_t, ephs)
 
     #### DO THE DOPPLER FiX
-    with pm.Model() as model:
+    with pm.Model("doppler") as model:
 
-        lonlat = VMF("lonlat", k=0.01, shape=2, testval=np.array([0.0,0.0]))
+        lonlat = VMF("lonlat", k=0.05, shape=2, testval=np.array([0.0,0.0]))
         lon = lonlat[0]
         lat = lonlat[1]
         
@@ -230,7 +266,7 @@ def doppler_model(t0_uncorrected, acq, gps_t, ephs, plot):
         idata = pm.sample(draws=500, init='advi+adapt_diag', tune=500, chains=4, \
             start=start, return_inferencedata=True, discard_tuned_samples=True)
     
-    doppler_stats = characterize_posterior(idata, plot=plot, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
+    doppler_stats = characterize_posterior("doppler", idata, plot=plot, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
     return doppler_stats
 
 def run_doppler_model(*args, **kwargs):
@@ -241,7 +277,7 @@ def run_doppler_model(*args, **kwargs):
 
 def phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, ephs, plot):
     ph_loglike = PhaseLogLike(acq, gps_t, ephs)
-    with pm.Model() as model:
+    with pm.Model("phase") as model:
 
         ## 1 / kappa = sigma^2 => kappa = 1 / sigma^2 (assume sigma = np.degrees(3))
         lon_start = doppler_stats['lonlat[0]']['median']
@@ -249,24 +285,14 @@ def phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, eph
         
         print(f"lonlat_start = {[lon_start, lat_start]}")
         
-        if False:
-            lonlat = VMF("lonlat", lon_lat=[lon_start, lat_start],  k=kappa, shape=2, testval=np.array([lon_start, lat_start]))
-            lon = lonlat[0]
-            lat = lonlat[1]
-        else:
-            lon = pm.Normal('lonlat[0]', mu = lon_start, sigma=doppler_stats['lonlat[0]']['std'])
-            lat = pm.Normal('lonlat[1]', mu = lat_start, sigma=doppler_stats['lonlat[1]']['std'])
+        lon = pm.Normal('lonlat[0]', mu = lon_start, sigma=doppler_stats['lonlat[0]']['std'])
+        lat = pm.Normal('lonlat[1]', mu = lat_start, sigma=doppler_stats['lonlat[1]']['std'])
         
         alt = pm.HalfNormal("alt", sigma=1.0) * 1000
         if False:
             offset = pm.Uniform("phase_offset", lower=0, upper=1)
         else:
             offset = (pm.VonMises("phase_offset", mu=0, kappa=0.01) + np.pi) / (2*np.pi)
-        #sow = pm.VonMises(
-            #"sow",
-            #mu=0,
-            #kappa=0.01,
-        #)*(clock_offset_std+0.5) / np.pi + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
 
         clk_err = (clock_offset_std+0.5)
         sow = pm.Uniform("sow_offset",  lower=-clk_err, upper=clk_err)  + gps_t.sow() # Add half a second as the rtc is only accurate to 1 second.
@@ -277,12 +303,13 @@ def phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, eph
     
         if True:
             start = pm.find_MAP()
-            idata = pm.sample(draws=1000, init='advi+adapt_diag', tune=n_tune, chains=n_chains, start=start, return_inferencedata=True, discard_tuned_samples=True)
+            n_tune = 1000
+            idata = pm.sample(draws=1000, init='advi+adapt_diag', tune=n_tune, start=start, return_inferencedata=True, discard_tuned_samples=True)
         else:
             trace = pm.sample_smc(draws=1000, parallel=True)
             idata = az.data.convert_to_inference_data(trace)
 
-    phase_stats = characterize_posterior(idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")
+    phase_stats = characterize_posterior("phase", idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")
     return phase_stats
 
 def run_phase_model(*args, **kwargs):
