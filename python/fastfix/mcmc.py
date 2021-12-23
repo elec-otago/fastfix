@@ -74,7 +74,7 @@ class PhaseLogLike(tt.Op):
             ):
                 sigma = 0.05
                 if meas_xm > 12:
-                    sigma = 0.02  # Should be close to one sample which is 1/8k
+                    sigma = 0.002  # Should be close to one sample which is 1/8k
                 if pred_xm < 8.0 or meas_xm < 8.0:
                     sigma = 2.0  # These should be ignored, therefore a huge variance.
 
@@ -263,7 +263,7 @@ def doppler_model(t0_uncorrected, acq, gps_t, ephs, plot):
         like = pm.Potential("like", do_loglike(theta_do))
     
         start = pm.find_MAP()
-        idata = pm.sample(draws=500, init='advi+adapt_diag', tune=500, chains=4, \
+        idata = pm.sample(draws=1000, init='advi+adapt_diag', tune=1000, chains=4, \
             start=start, return_inferencedata=True, discard_tuned_samples=True)
     
     doppler_stats = characterize_posterior("doppler", idata, plot=plot, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
@@ -301,12 +301,13 @@ def phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, eph
         
         phase_like = pm.Potential("phase_like", ph_loglike(theta_ph))
     
-        if True:
+        n_draws = 3000
+        if False:
             start = pm.find_MAP()
-            n_tune = 1000
-            idata = pm.sample(draws=1000, init='advi+adapt_diag', tune=n_tune, start=start, return_inferencedata=True, discard_tuned_samples=True)
+            n_tune = n_draws
+            idata = pm.sample(draws=n_draws, init='advi+adapt_diag', tune=n_tune, start=start, return_inferencedata=True, discard_tuned_samples=True)
         else:
-            trace = pm.sample_smc(draws=1000, parallel=True)
+            trace = pm.sample_smc(draws=n_draws, parallel=True)
             idata = az.data.convert_to_inference_data(trace)
 
     phase_stats = characterize_posterior("phase", idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")
