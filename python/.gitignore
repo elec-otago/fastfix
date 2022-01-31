@@ -1,1 +1,4 @@
 *.log
+__pycache__
+dist
+orbit_data
