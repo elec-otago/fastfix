@@ -362,7 +362,8 @@ def process_mcmc(acq, start_date, brdc_proxy, local_clock_offset, plot=False):
 
     print(phase_stats)
     new_sow_err = phase_stats["sow_offset"]["std"]
-    if (new_sow_err < (clock_offset_std + 0.5)) and (new_sow_err > 1e-3):
+    new_sow_rhat = phase_stats["sow_offset"]["r_hat"]
+    if (new_sow_err < (clock_offset_std + 0.5)) and (new_sow_rhat < 1.02):
         gps_t_uncorrected = GpsTime.from_time(t0_uncorrected)
 
         clock_offset = clock_offset + phase_stats["sow_offset"]["median"]
