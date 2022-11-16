@@ -26,12 +26,12 @@ def idiv(x, y):
 
 def rem(x, y):
     """ Remainder """
-    return x - y * Util.idiv(x, y)
+    return x - y * idiv(x, y)
 
 #! \brief remainder = numerator - quotient * denominator
 #
 def mod(x, y):
-    ret = x - y * Util.idiv(x, y)
+    ret = x - y * idiv(x, y)
     return ret
 
 def mod_int(x, y):
@@ -48,7 +48,7 @@ def phase_delta2(x, y):
     return np.abs(z - mu) / Util.PI2
 
 def phase_delta(x):
-    ret = self.mod_int(x, 1)
+    ret = mod_int(x, 1)
     if ret > 0.5:
         ret = 1.0 - ret
     return ret
@@ -64,7 +64,7 @@ def rad2deg(x):
     return np.degrees(x)
 
 def rem2pi(x):
-    return Util.rem(x, Util.PI2)
+    return rem(x, Util.PI2)
 
 def safePath(url):
     safePath_chars = set(map(lambda x: ord(x), '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+-_.'))

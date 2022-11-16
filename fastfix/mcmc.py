@@ -2,7 +2,7 @@
 import concurrent.futures
 from theano import config
 from .vmf import VMF
-from .util import Util
+from .util import Util, gaussian_llh
 from .angle import from_dms
 from .location import Location
 from .gps_time import GpsTime
@@ -81,7 +81,7 @@ class PhaseLogLike(tt.Op):
                     # These should be ignored, therefore a huge variance.
                     sigma = 2.0
 
-                logp += Util.gaussian_llh(x=meas_ph, mu=pred_ph, sigma=sigma)
+                logp += gaussian_llh(x=meas_ph, mu=pred_ph, sigma=sigma)
 
         except Exception as e:
             logger.info(f"Exception {e}: param: {theta}")
@@ -137,7 +137,7 @@ class DopplerLogLike(tt.Op):
             # if elevation < 5 and xmax < 9:
             ##sigma = 300.0 * (10.0 - xmax)
 
-            logp += Util.gaussian_llh(x=meas, mu=sim, sigma=200.0)
+            logp += gaussian_llh(x=meas, mu=sim, sigma=200.0)
 
         outputs[0][0] = np.array(logp)
 

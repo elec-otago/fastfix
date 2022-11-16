@@ -380,16 +380,16 @@ class Ephemeris(object):
         m = self.M0 + n * tk  # Mean anomaly
 
         # test = self.getE0(sow)
-        m = util.rem2pi(m + Util.PI2)
+        m = rem2pi(m + Util.PI2)
         e = m
         for i in range(0, 15):
             e_old = e
             e = m + self.ecc * math.sin(e_old)
-            dE = util.rem2pi(e - e_old)
+            dE = rem2pi(e - e_old)
             if abs(dE) < 1.0e-15:
                 break
 
-        e = util.rem2pi(e + Util.PI2)
+        e = rem2pi(e + Util.PI2)
         return e
 
     def get_sv_position(self, gt):
@@ -415,7 +415,7 @@ class Ephemeris(object):
             math.sin(e), math.cos(e) - self.ecc
         )
         phi = v + self.omega
-        phi = util.rem2pi(phi)
+        phi = rem2pi(phi)
         phi2 = 2.0 * phi
 
         cosphi2 = math.cos(phi2)
@@ -430,7 +430,7 @@ class Ephemeris(object):
             + (self.Omegadot - Ephemeris.WGS84_EARTH_ROTATION_RATE) * tk
             - Ephemeris.WGS84_EARTH_ROTATION_RATE * self.toe
         )
-        om = util.rem2pi(om + Util.PI2)
+        om = rem2pi(om + Util.PI2)
         logger.debug(("w_c={}, wdot={}, om={}".format(
             self.Omega0, self.Omegadot, om)))
         x1 = math.cos(u) * r
@@ -454,7 +454,7 @@ class Ephemeris(object):
         https:#gssc.esa.int/navipedia/index.php/GPS_and_Galileo_Satellite_Coordinates_Computation
         """
         a = self.roota * self.roota  # Semi major axis
-        tk = Util.check_t(sow - self.toe)
+        tk = check_t(sow - self.toe)
 
         Mk = self.M0 + (math.sqrt(Ephemeris.GM / (a ** 3)) + self.deltan) * tk
 
