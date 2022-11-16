@@ -1,5 +1,6 @@
 develop:
-	sudo python3 setup.py develop
+	pip3 install -e .
+# sudo python3 setup.py develop
 
 test:
 	pytest-3 -k TestEphem
