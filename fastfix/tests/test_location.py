@@ -325,7 +325,7 @@ class TestLocation(unittest.TestCase):
         self.assertAlmostEqual(jd, 2455034.71516, 5)
 
     def test_solar_elevation(self):
-        t = now()
+        t = utc_now()
         s = sun.Sun()
         ra, decl = s.radec(t)
 

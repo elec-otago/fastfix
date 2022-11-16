@@ -8,7 +8,7 @@ from .ephemeris import Ephemerides
 from .gps_time import GpsTime
 from .location import Location
 from .angle import from_dms
-from .util import Util
+from .util import Util, phase_delta
 
 logger = logging.getLogger(__name__)
 # Add a null handler so logs can go somewhere
@@ -276,7 +276,7 @@ def phase_f_opt(x, sats, xmaxs, meas_phase):
             sigma = 2.0  # These should be ignored, therefore a huge variance.
 
         logp += -np.log(np.sqrt(2.0 * np.pi) * sigma)
-        logp += -((Util.phase_delta(meas_ph - pred_ph))
+        logp += -((phase_delta(meas_ph - pred_ph))
                   ** 2.0) / (2.0 * sigma ** 2.0)
 
     return logp

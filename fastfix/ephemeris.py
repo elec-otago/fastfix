@@ -9,7 +9,8 @@ import string
 import numpy as np
 
 
-from .util import Util
+from .util import Util, rem2pi, check_t
+
 from .gps_time import GpsTime
 
 logger = logging.getLogger(__name__)
@@ -315,7 +316,7 @@ class Ephemeris(object):
     def clock_correct(self, Tsv):
         # more accurate calculation
         e = self.getE(Tsv)
-        dt = Util.check_t(Tsv - self.toc.sow())
+        dt = check_t(Tsv - self.toc.sow())
         dtr = (
             -4.442807e-10 * self.ecc * self.roota * math.sin(e)
         )  # relatavistic correction
@@ -323,7 +324,7 @@ class Ephemeris(object):
         return dtsv
 
     def get_tk(self, sow):
-        tk = Util.check_t(
+        tk = check_t(
             sow - self.toe
         )  # Time from ephemeris reference epoch (1)
         if (tk < -302400.0) or (tk > 302400.0):
@@ -379,16 +380,16 @@ class Ephemeris(object):
         m = self.M0 + n * tk  # Mean anomaly
 
         # test = self.getE0(sow)
-        m = Util.rem2pi(m + Util.PI2)
+        m = util.rem2pi(m + Util.PI2)
         e = m
         for i in range(0, 15):
             e_old = e
             e = m + self.ecc * math.sin(e_old)
-            dE = Util.rem2pi(e - e_old)
+            dE = util.rem2pi(e - e_old)
             if abs(dE) < 1.0e-15:
                 break
 
-        e = Util.rem2pi(e + Util.PI2)
+        e = util.rem2pi(e + Util.PI2)
         return e
 
     def get_sv_position(self, gt):
@@ -414,7 +415,7 @@ class Ephemeris(object):
             math.sin(e), math.cos(e) - self.ecc
         )
         phi = v + self.omega
-        phi = Util.rem2pi(phi)
+        phi = util.rem2pi(phi)
         phi2 = 2.0 * phi
 
         cosphi2 = math.cos(phi2)
@@ -429,7 +430,7 @@ class Ephemeris(object):
             + (self.Omegadot - Ephemeris.WGS84_EARTH_ROTATION_RATE) * tk
             - Ephemeris.WGS84_EARTH_ROTATION_RATE * self.toe
         )
-        om = Util.rem2pi(om + Util.PI2)
+        om = util.rem2pi(om + Util.PI2)
         logger.debug(("w_c={}, wdot={}, om={}".format(
             self.Omega0, self.Omegadot, om)))
         x1 = math.cos(u) * r
