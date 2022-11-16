@@ -1,38 +1,38 @@
 
 import concurrent.futures
-from theano import config
+# from theano import config
 from .vmf import VMF
-from .util import Util, gaussian_llh
+from .util import gaussian_llh
 from .angle import from_dms
 from .location import Location
 from .gps_time import GpsTime
 from .fastfix import doppler_fmap, Satellite, phase_fmap
-import numpy as np
-import matplotlib.pyplot as plt
+
 import datetime
 import logging
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pymc3 as pm
+import arviz as az
 
-import theano
 import theano.tensor as tt
 
 # import theano.tests.unittest_tools as utt
-import arviz as az
 
 logger = logging.getLogger(__name__)
 # Add a null handler so logs can go somewhere
 logger.addHandler(logging.NullHandler())
 logger.setLevel(logging.INFO)
 
-# 
+#
 # def clear_theano_cache():
 #     # We skip the refresh on module cache creation because the refresh will
 #     # be done when calling clear afterwards.
 #     cache = get_module_cache(init_args=dict(do_refresh=False))
 #     cache.clear(unversioned_min_age=-1, clear_base_files=True,
 #                 delete_if_problem=True)
-# 
+#
 #     # Print a warning if some cached modules were not removed, so that the
 #     # user knows he should manually delete them, or call
 #     # theano-cache purge, # to properly clear the cache.
@@ -46,7 +46,8 @@ logger.setLevel(logging.INFO)
 #             'remove everything from that directory.' %
 #             config.compiledir)
 #         _logger.debug(f"Remaining elements ({len(items)}): {', '.join(items)}")
-# 
+#
+
 
 class PhaseLogLike(tt.Op):
     itypes = [tt.dvector]
@@ -119,8 +120,7 @@ class DopplerLogLike(tt.Op):
         (theta,) = inputs
         lat, lon, delta_f = theta
 
-        N = self.x.shape[0]
-        # logger.info(f"param: {theta}, N={N}")
+        # logger.info(f"param: {theta}, N={self.x.shape[0]}")
         mu = doppler_fmap(lat, lon, delta_f, self.x, self.v)
 
         rp = Location(from_dms(lat), from_dms(lon), 0.0)
@@ -137,7 +137,7 @@ class DopplerLogLike(tt.Op):
             # if elevation < 5 and xmax < 9:
             ##sigma = 300.0 * (10.0 - xmax)
 
-            logp += gaussian_llh(x=meas, mu=sim, sigma=200.0)
+            logp += gaussian_llh(x=meas, mu=sim, sigma=sigma)
 
         outputs[0][0] = np.array(logp)
 

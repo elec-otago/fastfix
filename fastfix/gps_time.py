@@ -1,6 +1,5 @@
 # Copyright (C) Tim Molteno 2008-2019. All rights reserved
 
-import datetime
 import math
 
 from .utc import utc_datetime

@@ -49,7 +49,7 @@ def cart2dir(cart):
     try:
         # calculate inclination (converting to degrees) #
         Incs = np.arcsin((Zs / Rs)) / rad
-    except:
+    except Exception:
         print('trouble in cart2dir')  # most likely division by zero somewhere
         return np.zeros(3)
 
@@ -131,7 +131,7 @@ def angle(D1, D2):
 def vmf_logp(lon_lat, k, x):
 
     if x[1] < -90. or x[1] > 90.:
-        #raise RuntimeError(f"Value out of range {x}")
+        # raise RuntimeError(f"Value out of range {x}")
         return np.array(-1e6)  # np.array(-np.inf)
     if k < eps:
         return np.log(1. / 4. / np.pi)
@@ -142,7 +142,7 @@ def vmf_logp(lon_lat, k, x):
 
 
 class VMF(pm.Continuous):
-    ''' 
+    '''
         https://en.wikipedia.org/wiki/Von_Mises%E2%80%93Fisher_distribution
     '''
 

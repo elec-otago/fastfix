@@ -1,5 +1,5 @@
 import unittest
-from ..gps_time import *
+from ..gps_time import GpsTime
 from ..utc import utc_datetime
 
 
