@@ -5,13 +5,16 @@ from theano.compile.ops import as_op
 from pymc3.distributions import draw_values, generate_samples
 from scipy.spatial.transform import Rotation as R
 
+
 def construct_euler_rotation_matrix(alpha, beta, gamma):
     r = R.from_euler('zyx', [alpha, beta, gamma], degrees=True)
     return r.as_matrix()
 
+
 eps = 1e-4
 d2r = np.pi / 180
 r2d = 180.0 / np.pi
+
 
 def cart2dir(cart):
     """
@@ -52,6 +55,7 @@ def cart2dir(cart):
 
     return np.array([Decs, Incs, Rs]).transpose()  # return the directions list
 
+
 def dir2cart(d):
     """
     Converts a list or array of vector directions in degrees (declination,
@@ -86,6 +90,7 @@ def dir2cart(d):
     cart = np.array([ints * np.cos(decs) * np.cos(incs), ints *
                      np.sin(decs) * np.cos(incs), ints * np.sin(incs)]).transpose()
     return cart
+
 
 def angle(D1, D2):
     """
@@ -127,7 +132,7 @@ def vmf_logp(lon_lat, k, x):
 
     if x[1] < -90. or x[1] > 90.:
         #raise RuntimeError(f"Value out of range {x}")
-        return np.array(-1e6) # np.array(-np.inf)
+        return np.array(-1e6)  # np.array(-np.inf)
     if k < eps:
         return np.log(1. / 4. / np.pi)
     theta = angle(x, lon_lat)[0]
@@ -140,10 +145,11 @@ class VMF(pm.Continuous):
     ''' 
         https://en.wikipedia.org/wiki/Von_Mises%E2%80%93Fisher_distribution
     '''
-    def __init__(self, lon_lat=[0.0,0.0], k=0.0,
-             *args, **kwargs):
+
+    def __init__(self, lon_lat=[0.0, 0.0], k=0.0,
+                 *args, **kwargs):
         super(VMF, self).__init__(*args, **kwargs)
-        
+
         self._k = tt.as_tensor_variable(pm.floatX(k))
         self._lon_lat = tt.as_tensor(np.array(lon_lat))
         print(f"init({lon_lat})")
@@ -154,8 +160,7 @@ class VMF(pm.Continuous):
         value = tt.as_tensor_variable(value)
         return vmf_logp(lon_lat, k, value)
 
-
-    def _random(self, lon_lat, k, size = None):
+    def _random(self, lon_lat, k, size=None):
         alpha = 0.
         beta = np.pi / 2. - lon_lat[1] * d2r
         gamma = lon_lat[0] * d2r
@@ -177,8 +182,9 @@ class VMF(pm.Continuous):
         return np.array([rotated_dir[0], rotated_dir[1]])
 
     def random(self, point=None, size=None):
-    
-        lon_lat, k = draw_values([self._lon_lat, self._k], point=point, size=size)
+
+        lon_lat, k = draw_values(
+            [self._lon_lat, self._k], point=point, size=size)
         return generate_samples(self._random, lon_lat, k,
                                 dist_shape=self.shape,
-                               size=size)
+                                size=size)

@@ -131,8 +131,10 @@ class TestLocation(unittest.TestCase):
                 az_i = from_dms(az)
                 el_i = from_dms(el)
 
-                ra, dec = Dunedin.horizontal_to_equatorial(self.utc_date, el_i, az_i)
-                el_f, az_f = Dunedin.equatorial_to_horizontal(self.utc_date, ra, dec)
+                ra, dec = Dunedin.horizontal_to_equatorial(
+                    self.utc_date, el_i, az_i)
+                el_f, az_f = Dunedin.equatorial_to_horizontal(
+                    self.utc_date, ra, dec)
 
                 # print(Dunedin)
                 # print('INIT: el az:', el_i, az_i)
@@ -236,10 +238,12 @@ class TestLocation(unittest.TestCase):
 
         for el, az in zip(np.linspace(0, 90, 10), np.linspace(0, 259, 10)):
 
-            elaz = coord.SkyCoord(alt=el * u.deg, az=az * u.deg, frame=altaz_frame)
+            elaz = coord.SkyCoord(alt=el * u.deg, az=az *
+                                  u.deg, frame=altaz_frame)
             radec = elaz.transform_to(coord.ICRS)
 
-            ra, dec = loc.horizontal_to_equatorial(utc_date, from_dms(el), from_dms(az))
+            ra, dec = loc.horizontal_to_equatorial(
+                utc_date, from_dms(el), from_dms(az))
 
             self.assertAlmostEqual(
                 radec.ra.degree, ra.to_degrees(), -1
@@ -347,7 +351,8 @@ class TestLocation(unittest.TestCase):
         theta = 90.0  # Straight Up
         phi = 0.0
 
-        x, y, z = Dunedin.horizontal_to_ecef(0.0, from_dms(theta), from_dms(phi))
+        x, y, z = Dunedin.horizontal_to_ecef(
+            0.0, from_dms(theta), from_dms(phi))
 
         ecef = Dunedin.get_ecef()
 
@@ -383,7 +388,8 @@ class TestLocation(unittest.TestCase):
 
         for r, el, az in zip(r_arr, el_arr, az_arr):
             x, y, z = self.astropy_horizontal_to_ECEF(r, el, az, loc, utc_date)
-            xi, yi, zi = Dunedin.horizontal_to_ecef(r, from_dms(el), from_dms(az))
+            xi, yi, zi = Dunedin.horizontal_to_ecef(
+                r, from_dms(el), from_dms(az))
 
             self.assertAlmostEqual(x / xi, 1.0, 3)
             self.assertAlmostEqual(y / yi, 1.0, 3)

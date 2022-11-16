@@ -1,6 +1,7 @@
 import math
 import numpy as np
 
+
 class Util(object):
     PI = 3.1415926535897932
     PI2 = 6.2831853071795864
@@ -44,13 +45,13 @@ class Util(object):
             ret = y - (-x) % y
         return ret
 
-    #@classmethod
-    #def phase_delta(self, x, y):
+    # @classmethod
+    # def phase_delta(self, x, y):
 
         #mu = np.exp(2j*Util.PI*y)
         #z = np.exp(2j*Util.PI*x)
-        
-        #return np.abs(z - mu) / Util.PI2
+
+        # return np.abs(z - mu) / Util.PI2
 
     @classmethod
     def phase_delta(self, x):
@@ -74,9 +75,9 @@ class Util(object):
     @classmethod
     def rem2pi(self, x):
         return Util.rem(x, Util.PI2)
-    
-    
+
     @classmethod
     def safePath(url):
-        return ''.join(map(lambda ch: chr(ch) if ch in safePath.chars else '%%%02x' % ch, url.encode('utf-8')))
-    safePath.chars = set(map(lambda x: ord(x), '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+-_.'))
+        safePath_chars = set(map(lambda x: ord(x), '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+-_.'))
+        return ''.join(map(lambda ch: chr(ch) if ch in safePath_chars else '%%%02x' % ch, url.encode('utf-8')))
+    

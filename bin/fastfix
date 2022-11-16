@@ -68,8 +68,6 @@ if __name__ == '__main__':
                 if (ARGS.n > 0) and (count >= ARGS.n):
                     break
                 if ARGS.mcmc:
-                
-
                     estimated_clock_offset = fastfix.process_mcmc(fix, start_date, brdc_proxy, local_clock_offset=estimated_clock_offset, plot=ARGS.plot)
                     ret_json['fixes'].append(fix)
                 else:

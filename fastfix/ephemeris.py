@@ -1,5 +1,7 @@
 # Copyright (C) Tim Molteno 2008-2019. All rights reserved
 
+from unlzw import unlzw
+import io
 import math
 import logging
 import string
@@ -11,7 +13,8 @@ from .util import Util
 from .gps_time import GpsTime
 
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHandler())  # Add a null handler so logs can go somewhere
+# Add a null handler so logs can go somewhere
+logger.addHandler(logging.NullHandler())
 logger.setLevel(logging.INFO)
 
 
@@ -22,7 +25,7 @@ def substr(s, x, n):
     """Get a substring, ready for conversion to a number. Change the D -> E from the old-fashioned
     FORTRAN number format.
     """
-    return s[int(x) : int(x + n)].strip().translate(t)
+    return s[int(x): int(x + n)].strip().translate(t)
 
 
 def str_to_int(s, x, n):
@@ -121,8 +124,6 @@ For each ephemeris, the files is stored in RINEX format. Here is the data
  +--------------------+------------------------------------------+------------+
 
 """
-import io
-from unlzw import unlzw
 
 
 class Ephemerides:
@@ -208,7 +209,8 @@ class Ephemerides:
                 minute = str_to_int(line, 15, 2)
                 second = str_to_float(line, 18, 4)
 
-                eph.toc = GpsTime(2000 + year, month, day, hour, minute, second)
+                eph.toc = GpsTime(2000 + year, month, day,
+                                  hour, minute, second)
                 eph.svprn = svprn
 
                 eph.af0 = str_to_float(line, 22, 19)
@@ -323,8 +325,8 @@ class Ephemeris(object):
     def get_tk(self, sow):
         tk = Util.check_t(
             sow - self.toe
-        )  #        Time from ephemeris reference epoch (1)
-        if (tk < -302400.0) or ( tk > 302400.0):
+        )  # Time from ephemeris reference epoch (1)
+        if (tk < -302400.0) or (tk > 302400.0):
             raise RuntimeError(f"Invalid time {sow}, toe={self.toe}")
         return tk
 
@@ -347,11 +349,12 @@ class Ephemeris(object):
         ek = x  # end of det. of ecc. anomaly
 
         tk = self.get_tk(sow)
-        n0 = math.sqrt(Ephemeris.GM / (self.roota ** 6))  #        Computed mean motion
-        n = n0 + self.deltan  #        Corrected mean motion
-        mk = self.M0 + n * tk  #    mean anomaly
+        # Computed mean motion
+        n0 = math.sqrt(Ephemeris.GM / (self.roota ** 6))
+        n = n0 + self.deltan  # Corrected mean motion
+        mk = self.M0 + n * tk  # mean anomaly
 
-        x = mk  #    kepler's equation for eccentric anomaly ek
+        x = mk  # kepler's equation for eccentric anomaly ek
         y = mk - (x - self.ecc * math.sin(x))
         x1 = x
         x = y
@@ -371,9 +374,9 @@ class Ephemeris(object):
     def getE(self, sow):
         a = self.roota * self.roota
         tk = self.get_tk(sow)
-        n0 = math.sqrt(Ephemeris.GM / (a ** 3))  #  Computed mean motion
-        n = n0 + self.deltan  #  Corrected mean motion
-        m = self.M0 + n * tk  #  Mean anomaly
+        n0 = math.sqrt(Ephemeris.GM / (a ** 3))  # Computed mean motion
+        n = n0 + self.deltan  # Corrected mean motion
+        m = self.M0 + n * tk  # Mean anomaly
 
         # test = self.getE0(sow)
         m = Util.rem2pi(m + Util.PI2)
@@ -392,7 +395,7 @@ class Ephemeris(object):
         return self.get_location(gt.sow())
 
     def get_sv_position_utc(self, utc_datetime):
-        gpst = gps_time.GpsTime.from_time(utc_datetime)
+        gpst = GpsTime.from_time(utc_datetime)
         return self.get_location(gpst.sow())
 
     def get_location(self, sow):
@@ -402,12 +405,13 @@ class Ephemeris(object):
         https://ascelibrary.org/doi/pdf/10.1061/9780784411506.ap03
         """
         a = self.roota * self.roota  # Semi major axis
-        tk = self.get_tk(sow)  #     tk = sow-@toe
+        tk = self.get_tk(sow)  # tk = sow-@toe
 
         e = self.getE(sow)
 
         v = math.atan2(
-            math.sqrt(1.0 - (self.ecc ** 2)) * math.sin(e), math.cos(e) - self.ecc
+            math.sqrt(1.0 - (self.ecc ** 2)) *
+            math.sin(e), math.cos(e) - self.ecc
         )
         phi = v + self.omega
         phi = Util.rem2pi(phi)
@@ -417,7 +421,8 @@ class Ephemeris(object):
         sinphi2 = math.sin(phi2)
 
         u = phi + self.cuc * cosphi2 + self.cus * sinphi2
-        r = a * (1.0 - self.ecc * math.cos(e)) + self.crc * cosphi2 + self.crs * sinphi2
+        r = a * (1.0 - self.ecc * math.cos(e)) + \
+            self.crc * cosphi2 + self.crs * sinphi2
         i = self.i0 + self.idot * tk + self.cic * cosphi2 + self.cis * sinphi2
         om = (
             self.Omega0
@@ -425,7 +430,8 @@ class Ephemeris(object):
             - Ephemeris.WGS84_EARTH_ROTATION_RATE * self.toe
         )
         om = Util.rem2pi(om + Util.PI2)
-        logger.debug(("w_c={}, wdot={}, om={}".format(self.Omega0, self.Omegadot, om)))
+        logger.debug(("w_c={}, wdot={}, om={}".format(
+            self.Omega0, self.Omegadot, om)))
         x1 = math.cos(u) * r
         y1 = math.sin(u) * r
 
@@ -457,7 +463,8 @@ class Ephemeris(object):
             E_0 = E_k
 
         v_k = math.atan(
-            math.sqrt(1.0 - (self.ecc ** 2)) * math.sin(E_k) / math.cos(E_k) - self.ecc
+            math.sqrt(1.0 - (self.ecc ** 2)) *
+            math.sin(E_k) / math.cos(E_k) - self.ecc
         )
 
         phi = v_k + self.omega

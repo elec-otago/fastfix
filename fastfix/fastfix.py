@@ -11,7 +11,8 @@ from .angle import from_dms
 from .util import Util
 
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHandler())  # Add a null handler so logs can go somewhere
+# Add a null handler so logs can go somewhere
+logger.addHandler(logging.NullHandler())
 logger.setLevel(logging.INFO)
 
 
@@ -58,7 +59,8 @@ def process(acq, start_date, brdc_proxy, estimated_clock_offset, plot):
     local_clock_offset, clock_offset_std = estimated_clock_offset
 
     t0_uncorrected = start_date + datetime.timedelta(seconds=rtc_offset)
-    t0 = start_date + datetime.timedelta(seconds=rtc_offset + local_clock_offset)
+    t0 = start_date + \
+        datetime.timedelta(seconds=rtc_offset + local_clock_offset)
 
     logger.info(
         f"FastFix processing: t0={t0.isoformat()}, offset={estimated_clock_offset}"
@@ -151,7 +153,8 @@ class Satellite:
         # codephase is started on the millisecond, and received at an arbitrary time.
         uncorrected_codephase = ms % 1.0
 
-        corrected_codephase = uncorrected_codephase - 1000.0 * self.clock_correct(sow)
+        corrected_codephase = uncorrected_codephase - \
+            1000.0 * self.clock_correct(sow)
         ret = np.mod(corrected_codephase, 1)
         return ret
 
@@ -207,7 +210,7 @@ def phase_fmap(
     for s in svs:
         sim_phase = np.mod(s.codephase(sow, r_0) + offset, 1)
         elevation = s.elevation(sow, r_0)
-        
+
         # Simulate the expected correlation amplitude
         xmax = 7 + 15 * signal_strength(np.radians(elevation))
         pred_phases.append(sim_phase)
@@ -260,7 +263,8 @@ def doppler_fix(acq, t0, ephs):
 def phase_f_opt(x, sats, xmaxs, meas_phase):
     lat, lon, alt, offset, sow = x
 
-    pred_phases, pred_xmax, pred_prn = phase_fmap(sats, lat, lon, alt, offset, sow)
+    pred_phases, pred_xmax, pred_prn = phase_fmap(
+        sats, lat, lon, alt, offset, sow)
     logp = 0.0
     for meas_ph, pred_ph, meas_xm, pred_xm in zip(
         meas_phase, pred_phases, xmaxs, pred_xmax
@@ -272,7 +276,8 @@ def phase_f_opt(x, sats, xmaxs, meas_phase):
             sigma = 2.0  # These should be ignored, therefore a huge variance.
 
         logp += -np.log(np.sqrt(2.0 * np.pi) * sigma)
-        logp += -((Util.phase_delta(meas_ph - pred_ph)) ** 2.0) / (2.0 * sigma ** 2.0)
+        logp += -((Util.phase_delta(meas_ph - pred_ph))
+                  ** 2.0) / (2.0 * sigma ** 2.0)
 
     return logp
 

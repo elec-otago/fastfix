@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from scipy import optimize
+import scipy
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -6,6 +8,8 @@ import pyfftw
 import time
 
 # from numpy import *
+
+
 def to_db(x):
     return np.log10(x) * 10
 
@@ -106,14 +110,11 @@ def gold(samples_per_code, PRN, epochs):
     code_samples = np.arange(np.floor(samples_per_code * epochs))
     # An array of sample indexes
 
-    code_indices = np.floor(code_samples / samples_per_chip).astype("int") % 1023
+    code_indices = np.floor(
+        code_samples / samples_per_chip).astype("int") % 1023
 
     code = CAcode[code_indices]
     return code
-
-
-import scipy
-from scipy import optimize
 
 
 def correlate(x, y):
@@ -405,8 +406,10 @@ def optimize_fit(
     # print "codefreq %d" % np.size(codefreq)
     # print "signal %d" % np.size(signal)
 
-    func = lambda f: (1.0 / correlate_aux(f, signal, phasepoints, codefreq).max())
-    f_max = scipy.optimize.fminbound(func, fc[freq - 1], fc[freq + 1], xtol=1e-2)
+    def func(f): return (
+        1.0 / correlate_aux(f, signal, phasepoints, codefreq).max())
+    f_max = scipy.optimize.fminbound(
+        func, fc[freq - 1], fc[freq + 1], xtol=1e-2)
     cp_peak = 1.0 / func(f_max)
 
     print(
@@ -418,7 +421,8 @@ def optimize_fit(
     frequency = f_max - center_freq
     # Find the new codephase at this frequency
     autocorrelation = np.abs(
-        scipy.fft.ifft(scipy.fft.fft(np.exp(phasepoints * f_max) * signal) * codefreq)
+        scipy.fft.ifft(scipy.fft.fft(
+            np.exp(phasepoints * f_max) * signal) * codefreq)
     ) / np.sqrt(num_samples)
     cp_max = autocorrelation.argmax()
     cp_peak = autocorrelation.max()
@@ -432,11 +436,12 @@ def optimize_fit(
     # Now fit a gaussian to the codephase.
     cw = 2
     phases = np.arange(codephase - cw, codephase + cw)
-    values = autocorrelation[codephase - cw : codephase + cw]
+    values = autocorrelation[codephase - cw: codephase + cw]
     popt, success = peak_fit(phases, values, [values.max(), 1e-1, codephase])
     print((popt, success))
     if success <= 4.0:
-        print(("    [%02d] Codephase Optim %d -> %f" % (PRN, codephase, popt[2])))
+        print(("    [%02d] Codephase Optim %d -> %f" %
+              (PRN, codephase, popt[2])))
         codephase_frac = popt[2] / samples_per_ms
 
     return [codephase_frac, frequency, cp_peak]

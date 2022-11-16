@@ -1,5 +1,10 @@
 #!\bin/python
 # -*- coding: utf-8 -*-
+from subprocess import Popen, PIPE
+import sys
+import unittest
+import struct
+import matplotlib.pyplot as plt
 import time
 import scipy.io
 import json
@@ -53,7 +58,8 @@ def acquire_all(rx, fs, fc0, searchBand, plot_corr=False):
         for i in range(0, svMax):
             sv = i + 1
             resultList.append(
-                p.apply_async(acquire, (rx, fs, fc0, searchBand, sv, plot_corr))
+                p.apply_async(
+                    acquire, (rx, fs, fc0, searchBand, sv, plot_corr))
             )
 
         p.close
@@ -87,9 +93,6 @@ def acquire_all(rx, fs, fc0, searchBand, plot_corr=False):
     return ret
 
 
-import matplotlib.pyplot as plt
-
-
 # def gps_spectrum(filename, fs, resolution):
 # epochs = 2;
 
@@ -103,10 +106,10 @@ import matplotlib.pyplot as plt
 
 # plt.close('all')
 # title = "Captured GPS L1 spectrum"
-## Plot a each channel
+# Plot a each channel
 # power, freq = mlab.psd(rx,Fs=fs, NFFT=2048)
 # plt.plot(freq/1e6, 10.0*np.log10(power))
-##axarr[0].set_ylim([-80,-60])
+# axarr[0].set_ylim([-80,-60])
 # plt.grid()
 # plt.xlabel("Freq (MHz)")
 # plt.title(title)
@@ -119,14 +122,14 @@ import matplotlib.pyplot as plt
 
 # def tag_acquire(filename, fs, resolution, epochs, fc0, return_filename):
 # searchBand = 5000.0 # Range of frequencies to search
-## find the satellites
+# find the satellites
 # print(('Calculating Correlations over %d epochs: %s' % (epochs,filename)))
 # print(('Resolution (bits/data): ', resolution))
 # print(('Center Frequency (Hz): ', fc0))
 # print(('Samples Required : ', (fs * epochs / 1000)))
 # rx = load_data.load_real_data(filename, fs, resolution, epochs);
 
-## Do some local plotting
+# Do some local plotting
 # print(("size of data %05d " % np.size(rx)))
 
 # acquire(rx, fs, fc0, searchBand, return_filename)
@@ -161,9 +164,6 @@ def write_byte(byte, a, iq):
     write_nibble(byte & 0x0F, a, iq)
 
 
-import struct
-
-
 def decode(filename, iq):
     with open(filename, "rb") as f:
         bytes_read = f.read()
@@ -190,7 +190,7 @@ def decode(filename, iq):
         b = struct.Struct("BB")
         ret = []
         for i in range(0, sample_bytes - 2, 2):
-            lsb, msb = b.unpack(data_bytes[i : i + 2])
+            lsb, msb = b.unpack(data_bytes[i: i + 2])
             data_words.append(lsb + msb * 256)
             write_byte(msb, ret, iq)
             write_byte(lsb, ret, iq)
@@ -214,56 +214,4 @@ def calculate_checksum(sample_bytes, data_buffer):
     return ret
 
 
-# To test on known data use
-# python bit_error_rate.py ../../quickfix/python/30dBm.bin 8.184e6 1
-import unittest
-import sys
-from subprocess import Popen, PIPE
 
-
-class TestAcquisition(unittest.TestCase):
-    def setUp(self):
-        self.raw_file = "./test_data/FIX00033.BIN"
-        self.filename = "tag_data_file.out"
-
-        self.sample_ms, self.sampling_rate, self.checksum, self.dat = decode(
-            self.raw_file
-        )
-        cmd = "../decode/tag_decode %s >    %s" % (self.raw_file, self.filename)
-        process = Popen(cmd, stderr=PIPE, shell=True)
-        stdout, stderr = process.communicate()
-
-        self.fs = 16.368e6
-        self.fc0 = 4.092e6
-
-        print(stderr)
-        # values = Hash.new
-        # Open3.popen3(cmd) { |stdin, stdout, stderr|
-        # while l = stderr.gets
-        # puts l
-        # val= l.split(' => ')
-        # if    val[1] != nil
-        # values[val[0].strip] = val[1].strip.to_i
-        # end
-        # end
-        # }
-
-    def test_decode(self):
-        rx = load_data.load_real_data(self.filename, fs=self.fs, resolution=1, epochs=4)
-        sample_ms, sampling_rate, checksum, dat = decode(self.raw_file)
-        for i in range(0, len(rx)):
-            self.assertEqual(rx[i], dat[i])
-        # self.assertEqual(len(rx), len(dat))
-
-    def test_spectrum(self):
-        gps_spectrum(filename=self.filename, fs=self.fs, resolution=1)
-
-    def test_zsimple(self):
-        tag_acquire(
-            self.filename,
-            fs=self.fs,
-            resolution=1,
-            epochs=4,
-            fc0=self.fc0,
-            return_filename="results.out",
-        )

@@ -5,11 +5,11 @@
 # 00 -1
 # 10 +1
 # 11 +3
+import numpy as npy
+
+
 def sign_mag(sgn, mag):
     return sgn * (mag + 2)
-
-
-import numpy as npy
 
 
 def load_file(filename, n_bytes):

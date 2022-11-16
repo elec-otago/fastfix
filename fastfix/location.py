@@ -20,7 +20,8 @@ def sign(x):
 def JulianDay(timestamp):
     if timestamp.tzinfo is not None:
         if not isinstance(timestamp.tzinfo, UTC):
-            raise RuntimeError("Timestamp has timezone {}".format(timestamp.tzinfo))
+            raise RuntimeError(
+                "Timestamp has timezone {}".format(timestamp.tzinfo))
 
     YY = timestamp.year
     MM = timestamp.month
@@ -152,7 +153,8 @@ class Location(object):
         inverse_flattening = 298.257223563
 
         sinlat = self.lat.sin()
-        n = a * a / (np.sqrt(a * a * self.lat.cos() ** 2 + b * b * sinlat ** 2))
+        n = a * a / (np.sqrt(a * a * self.lat.cos()
+                     ** 2 + b * b * sinlat ** 2))
         x = (n + self.alt) * self.lat.cos() * self.lon.cos()
         y = (n + self.alt) * self.lat.cos() * self.lon.sin()
         z = (n * (b ** 2 / a ** 2) + self.alt) * sinlat
@@ -240,7 +242,7 @@ class Location(object):
 
     def horizontal_to_ecef(self, r, el, az):
         """ Convert r,el,az to ECEF """
-        ## Convert to ENU
+        # Convert to ENU
         e, n, u = Location.horizontal_to_enu(r, el, az)
 
         # Convert ENU to ECEF
@@ -295,7 +297,8 @@ class Location(object):
         lha = self.LHA(utc_date, ra)
         lat = self.lat
 
-        el = angle.asin(dec.sin() * lat.sin() + dec.cos() * lat.cos() * lha.cos())
+        el = angle.asin(dec.sin() * lat.sin() + dec.cos()
+                        * lat.cos() * lha.cos())
 
         az = angle.atan2(
             (-lha.sin()) * dec.cos(), (dec.sin() - lat.sin() * el.sin()) / lat.cos()
@@ -347,4 +350,5 @@ Dunedin_Farm = Location(
 )
 
 """Convenient helper function for somewhere cold and damp in the far north"""
-Aachen = Location(lat=angle.from_dms(50.778), lon=angle.from_dms(6.086), alt=46.5)
+Aachen = Location(lat=angle.from_dms(50.778),
+                  lon=angle.from_dms(6.086), alt=46.5)

@@ -16,7 +16,8 @@ class GpsTime(object):
         in_time = utc_datetime(
             year=y, month=m, day=d, hour=h, minute=minutes, second=seconds
         )
-        gps_t = utc_datetime(year=1980, month=1, day=6, hour=0, minute=0, second=0)
+        gps_t = utc_datetime(year=1980, month=1, day=6,
+                             hour=0, minute=0, second=0)
 
         self.m_day_of_year = in_time.timetuple().tm_yday
 

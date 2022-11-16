@@ -21,7 +21,8 @@ setup(
     tests_require=["nose", "ephem"],
     author_email="tim@elec.ac.nz",
     license="GPLv3",
-    install_requires=["numpy", "matplotlib", "scipy", "pyfftw", "unlzw", "pymc3"],
+    install_requires=["numpy", "matplotlib",
+                      "scipy", "pyfftw", "unlzw", "pymc3"],
     packages=["fastfix"],
     scripts=["bin/fastfix", "bin/acquire"],
     classifiers=[

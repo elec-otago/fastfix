@@ -1,5 +1,7 @@
 #!\bin/python
 # -*- coding: utf-8 -*-
+import sys
+import pylab as p
 import numpy as npy
 
 import acquisition
@@ -49,9 +51,6 @@ def acquire(rx, fs, fc0, searchBand):
     fp.close()
 
 
-import pylab as p
-
-
 def ber(filename, fs, resolution):
     fc0 = 000.0
     # center freq without Doppler
@@ -80,8 +79,6 @@ def ber(filename, fs, resolution):
 
 # To test on known data use
 # python bit_error_rate.py ../../quickfix/python/30dBm.bin 8.184e6 1
-
-import sys
 
 
 def main(*args):

@@ -44,7 +44,8 @@ class FileCache:
                 logging.info(f"Download Attempt {self.last_download_attempt}")
                 last_try = self.last_download_attempt[url]
                 print("last_try {}".format(last_try))
-                delta_seconds = (datetime.datetime.now() - last_try).total_seconds()
+                delta_seconds = (datetime.datetime.now() -
+                                 last_try).total_seconds()
                 if last_try and (delta_seconds < 3600):
                     raise RuntimeError(
                         f"Error ({url} -> {local_file}: Already attempted ({last_try})"

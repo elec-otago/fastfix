@@ -20,9 +20,11 @@ class Sp4Ephemeris:
         position, velocity = self.sv.propagate(
             date.year, date.month, date.day, date.hour, date.minute, date.second
         )
-        vel = [velocity[0] * 1000.0, velocity[1] * 1000.0, velocity[2] * 1000.0]
+        vel = [velocity[0] * 1000.0, velocity[1]
+               * 1000.0, velocity[2] * 1000.0]
         pos = location.eci_to_ecef(
-            date, position[0] * 1000.0, position[1] * 1000.0, position[2] * 1000.0
+            date, position[0] * 1000.0, position[1] *
+            1000.0, position[2] * 1000.0
         )
         return pos, vel
 
@@ -60,7 +62,8 @@ class Sp4Ephemerides:
         ret = []
         for sv in self.satellites:
             p, v = sv.get_position(date)
-            ret.append({"name": sv.name, "ecef": p, "ecef_dot": v, "jy": self.jansky})
+            ret.append({"name": sv.name, "ecef": p,
+                       "ecef_dot": v, "jy": self.jansky})
         return ret
 
     # def get_az_el(self, date, lat, lon, alt):

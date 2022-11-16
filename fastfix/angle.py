@@ -28,11 +28,14 @@ def wrap_180(x):
         r -= 360.0
     return r
 
+
 def d2r(x):
     return x * TWO_PI / 360.0
 
 # from functools import total_ordering
 # @total_ordering
+
+
 class Angle(object):
     def __init__(self, deg=0, minute=0, sec=0):
         dec_deg = deg + float(minute) / 60.0 + float(sec) / 3600.0
@@ -67,7 +70,7 @@ class Angle(object):
 
     def to_dms(self):
         dd = self.to_degrees()
-        mnt, sec = divmod(dd * 3600, 60)  ## 60 seconds in a
+        mnt, sec = divmod(dd * 3600, 60)  # 60 seconds in a
         deg, mnt = divmod(mnt, 60)
         return deg, mnt, sec
 

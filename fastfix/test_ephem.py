@@ -9,7 +9,8 @@ import numpy as np
 from fastfix import GPSFileCache, GpsTime
 
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHandler())  # Add a null handler so logs can go somewhere
+# Add a null handler so logs can go somewhere
+logger.addHandler(logging.NullHandler())
 logger.setLevel(logging.INFO)
 
 
@@ -36,12 +37,13 @@ class TestEphem(unittest.TestCase):
             n = sv["name"]
             if n.find("GPS") != -1:
                 x = n.find("PRN ")
-                prn = int(n[x + 4 : x + 6])
+                prn = int(n[x + 4: x + 6])
                 e = self.ephs.get_ephemeris(prn=prn, gps_t=gps_t)
                 sat_pos = e.get_location(gps_t.sow())
 
                 sat_pos2 = e.get_location_new(gps_t.sow())
-                logger.info(f"Old: {sat_pos}. New {sat_pos2}. External: {sv['ecef']}")
+                logger.info(
+                    f"Old: {sat_pos}. New {sat_pos2}. External: {sv['ecef']}")
                 for a, b in zip(sat_pos, sat_pos2):
                     self.assertAlmostEqual(a, b)
 
