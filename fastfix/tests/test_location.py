@@ -1,9 +1,11 @@
-from .location import Dunedin, Aachen, ecef_to_eci, JulianDay
-from .angle import from_dms
-from .utc import utc_datetime, now
-from . import utc
-from . import angle
-from . import location
+from ..angle import from_dms
+from ..utc import utc_datetime
+from ..utc import now as utc_now
+
+from .. import angle
+from .. import location
+from ..location import Dunedin, Aachen, ecef_to_eci, JulianDay
+
 
 import datetime
 import numpy as np
@@ -333,7 +335,7 @@ class TestLocation(unittest.TestCase):
         self.assertAlmostEqual(az.to_degrees(), az1.to_degrees(), 5)
 
     def test_eci_to_ecef(self):
-        utc_date = utc.now()
+        utc_date = utc_now()
         n_tests = 50
         x_arr = np.random.rand(n_tests) * 12345e3
         y_arr = np.random.rand(n_tests) * 23456e3
@@ -384,7 +386,7 @@ class TestLocation(unittest.TestCase):
         az_arr = np.random.rand(n_tests) * np.pi * 2
         r_arr = np.random.rand(n_tests) * 1e8
 
-        utc_date = utc.now()
+        utc_date = utc_now()
 
         for r, el, az in zip(r_arr, el_arr, az_arr):
             x, y, z = self.astropy_horizontal_to_ECEF(r, el, az, loc, utc_date)
@@ -401,7 +403,7 @@ class TestLocation(unittest.TestCase):
         theta_arr = np.random.rand(n_tests) * np.pi / 2
         phi_arr = np.random.rand(n_tests) * np.pi * 2
         r = 1.3e7
-        utc_date = utc.now()
+        utc_date = utc_now()
 
         for theta, phi in zip(theta_arr, phi_arr):
             xi, yi, zi = Dunedin.horizontal_to_eci(
@@ -422,7 +424,7 @@ class TestLocation(unittest.TestCase):
         az_arr = np.random.rand(n_tests) * np.pi * 2
         r_arr = np.random.rand(n_tests) * 1e8
 
-        # utc_date = utc.now()
+        # utc_date = utc_now()
 
         for r, el, az in zip(r_arr, el_arr, az_arr):
             x, y, z = self.astropy_horizontal_to_ECI(r, el, az, loc, utc_date)
