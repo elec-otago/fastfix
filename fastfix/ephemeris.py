@@ -5,6 +5,8 @@ import io
 import math
 import logging
 import string
+import gzip
+import pathlib
 
 import numpy as np
 
@@ -133,9 +135,16 @@ class Ephemerides:
         self._data = []
 
         logger.debug("Broadcast ephemerides file {}".format(filename))
-        with open(filename, "rb") as ifs:
-            compressed_data = ifs.read()
-            uncompressed_data = unlzw(compressed_data).decode("utf-8")
+
+        if pathlib.Path(filename).suffix == ".gz":
+            with gzip.open(filename, "rb") as ifs:
+                uncompressed_data = ifs.read().decode("utf-8")
+        elif pathlib.Path(filename).suffix == ".Z":
+            with open(filename, "rb") as ifs:
+                compressed_data = ifs.read()
+                uncompressed_data = unlzw(compressed_data).decode("utf-8")
+        else:
+            raise AttributeError("Format not supported : {}".format(pathlib.Path(filename).suffix))
 
         with io.StringIO(uncompressed_data) as ifs:
             """search header for ionosphere model parameters...

@@ -7,6 +7,7 @@ import urllib.request
 from .ephemeris import Ephemerides
 from .utc import to_utc, yday
 
+YEAR_SWITCH_Z_TO_GZ=2021
 
 class FileCache:
     def __init__(self, name):
@@ -22,10 +23,17 @@ class FileCache:
         # return f"ftp://cddis.gsfc.nasa.gov/gps/data/{path}"
 
         # ftp://igs.ensg.ign.fr/pub/igs/data/2001/012/brdc0120.01n.Z
-        return f"ftp://igs.ensg.ign.fr/pub/igs/data/{yyyy}/{doy}/brdc{doy}0.{yy}n.Z"
+        if yyyy < YEAR_SWITCH_Z_TO_GZ:
+            return f"ftp://gssc.esa.int/gnss/data/daily/{yyyy}/brdc/brdc{doy}0.{yy}n.Z"
+        else:
+            return f"ftp://gssc.esa.int/gnss/data/daily/{yyyy}/brdc/brdc{doy}0.{yy}n.gz"
 
     def get_local_filename(self, utc_date):
-        return "{}/{}/{}.dat.Z".format(utc_date.year, utc_date.month, utc_date.day)
+        if utc_date.year < YEAR_SWITCH_Z_TO_GZ:
+            filename_extension = "Z"
+        else:
+            filename_extension = "gz"
+        return "{}/{}/{}.dat.{}".format(utc_date.year, utc_date.month, utc_date.day, filename_extension)
 
     def get_local_path(self, fname):
         return f"{self.cache_root}/{fname}"
