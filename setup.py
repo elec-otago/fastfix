@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 import setuptools.command.test
 
-with open("README.md") as f:
+with open("README.md", 'r', encoding="utf-8") as f:
     readme = f.read()
 
 setup(
