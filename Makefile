@@ -1,5 +1,5 @@
-develop:
-	pip3 install -e .
+develop: venv
+	${VENV}/pip3 install -e .
 # sudo python3 setup.py develop
 
 test:
@@ -50,3 +50,9 @@ test_upload:
 upload:
 	python3 setup.py sdist
 	twine upload --repository pypi dist/*
+
+include Makefile.venv
+
+$(VENV):
+	$(PY) -m venv --system-site-packages $(VENVDIR)
+	$(VENV)/python -m pip install --upgrade pip setuptools wheel
