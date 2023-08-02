@@ -11,7 +11,7 @@ with open("README.md", 'r', encoding="utf-8") as f:
 
 setup(
     name="fastfix",
-    version="0.1.0b3",
+    version="0.1.0b4",
     description="FastFix Positioning",
     long_description=readme,
     long_description_content_type="text/markdown",
