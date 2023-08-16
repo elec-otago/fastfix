@@ -141,7 +141,7 @@ class Satellite:
         tx_time = rx_time - dt
 
         # recalculate satellite location and range at the time of sending
-        r = receiver_location - self.location(tx_time)
+        dr = receiver_location - self.location(tx_time)
         ret = np.linalg.norm(dr)
         return ret
 
