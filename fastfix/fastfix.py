@@ -31,7 +31,7 @@ def process(acq, start_date, brdc_proxy, estimated_clock_offset, plot):
 
     Example acq:
 
-    \param  acq       {
+    \\param  acq       {
         "codephase": [
             0.9564951729194672,
             0.16377758597064598
@@ -125,7 +125,7 @@ class Satellite:
         velocity = (range1 - range2) * 0.5 / dt
         return velocity / Util.WAVELENGTH
 
-    """ \brief Get the range to this satellite from the receiver_location.
+    r""" \brief Get the range to this satellite from the receiver_location.
             \param sow GPS time in seconds of the week
             \param receiver_location Receiver location (in rectangular co-ordinates)
             \return range in meters.

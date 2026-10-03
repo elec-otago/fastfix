@@ -303,7 +303,7 @@ def acquire(x, sampling_freq, center_freq, searchBand, PRN, plot=False):
         # plt.plot(code_samples[codephase-cw:codephase+cw], c_no[codephase-cw:codephase+cw])
         code_samples = np.arange(np.floor(samples_per_ms))
         plt.plot(code_samples / samples_per_ms, c_no)
-        plt.xlabel("codephase $\delta^i_\phi$")
+        plt.xlabel(r"codephase $\delta^i_\phi$")
         plt.ylabel(r"$X / \sigma_X$")
         plt.grid(True)
         plt.title(

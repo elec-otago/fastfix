@@ -47,9 +47,9 @@ class Angle(object):
     def to_elevation(self):
         deg = self.to_degrees()
         if deg > 90.0:
-            raise "Elevation out of RANGE %f" % deg
+            raise ValueError("Elevation out of RANGE %f" % deg)
         if deg < -90.0:
-            raise "Elevation out of RANGE %f" % deg
+            raise ValueError("Elevation out of RANGE %f" % deg)
 
         return from_dms(deg)
 

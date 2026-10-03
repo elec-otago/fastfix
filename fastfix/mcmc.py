@@ -1,6 +1,6 @@
 
 import concurrent.futures
-# from theano import config
+
 from .vmf import VMF
 from .util import gaussian_llh
 from .angle import from_dms
@@ -13,45 +13,25 @@ import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pymc3 as pm
+
+import pymc as pm
+import pytensor
+import pytensor.tensor as pt
 import arviz as az
-
-import theano.tensor as tt
-
-# import theano.tests.unittest_tools as utt
 
 logger = logging.getLogger(__name__)
 # Add a null handler so logs can go somewhere
 logger.addHandler(logging.NullHandler())
 logger.setLevel(logging.INFO)
 
-#
-# def clear_theano_cache():
-#     # We skip the refresh on module cache creation because the refresh will
-#     # be done when calling clear afterwards.
-#     cache = get_module_cache(init_args=dict(do_refresh=False))
-#     cache.clear(unversioned_min_age=-1, clear_base_files=True,
-#                 delete_if_problem=True)
-#
-#     # Print a warning if some cached modules were not removed, so that the
-#     # user knows he should manually delete them, or call
-#     # theano-cache purge, # to properly clear the cache.
-#     items = [item for item in sorted(os.listdir(cache.dirname))
-#              if item.startswith('tmp')]
-#     if items:
-#         raise RuntimeError(
-#             'There remain elements in the cache dir that you may '
-#             'need to erase manually. The cache dir is:\n  %s\n'
-#             'You can also call "theano-cache purge" to '
-#             'remove everything from that directory.' %
-#             config.compiledir)
-#         _logger.debug(f"Remaining elements ({len(items)}): {', '.join(items)}")
-#
 
+class PhaseLogLike:
+    """Log-likelihood of the codephase (phase) measurements.
 
-class PhaseLogLike(tt.Op):
-    itypes = [tt.dvector]
-    otypes = [tt.dscalar]
+    Ported from the PyMC3/Theano ``tt.Op`` implementation to a plain callable
+    wrapped with :func:`pytensor.wrap_py` so that it can be used as a
+    ``pm.Potential`` term in modern PyMC models.
+    """
 
     def __init__(self, acq, t0, ephs):
         self.svs = acq["sv"]
@@ -61,8 +41,7 @@ class PhaseLogLike(tt.Op):
             Satellite(sv, ephs.get_ephemeris(prn=sv, gps_t=t0)) for sv in self.svs
         ]
 
-    def perform(self, node, inputs, outputs):
-        (theta,) = inputs
+    def __call__(self, theta):
         lat, lon, alt, offset, sow = theta
 
         try:
@@ -88,12 +67,20 @@ class PhaseLogLike(tt.Op):
             logger.info(f"Exception {e}: param: {theta}")
             logp = -999.0e99
 
-        outputs[0][0] = np.array(logp)
+        return np.array(logp)
+
+    def as_tensor(self, theta):
+        """Return a symbolic scalar log-likelihood for the given theta vector."""
+
+        @pytensor.wrap_py(itypes=[pt.dvector], otypes=[pt.dscalar])
+        def _logp(th):
+            return np.asarray(self(th), dtype="float64")
+
+        return _logp(theta)
 
 
-class DopplerLogLike(tt.Op):
-    itypes = [tt.dvector]
-    otypes = [tt.dscalar]
+class DopplerLogLike:
+    """Log-likelihood of the doppler-shift measurements."""
 
     def __init__(self, acq, t0, ephs):
         svs = acq["sv"]
@@ -116,8 +103,7 @@ class DopplerLogLike(tt.Op):
         self.v = np.array(v)
         self.data = np.array(acq["doppler"])  # Measured data
 
-    def perform(self, node, inputs, outputs):
-        (theta,) = inputs
+    def __call__(self, theta):
         lat, lon, delta_f = theta
 
         # logger.info(f"param: {theta}, N={self.x.shape[0]}")
@@ -139,97 +125,118 @@ class DopplerLogLike(tt.Op):
 
             logp += gaussian_llh(x=meas, mu=sim, sigma=sigma)
 
-        outputs[0][0] = np.array(logp)
+        return np.array(logp)
 
+    def as_tensor(self, theta):
+        """Return a symbolic scalar log-likelihood for the given theta vector."""
 
-class DopplerPhaseLogLike(tt.Op):
-    def __init__(self, acq, t0, ephs):
-        self.doll = DopplerLogLike(acq, t0, ephs)
-        self.phll = PhaseLogLike(acq, t0, ephs)
+        @pytensor.wrap_py(itypes=[pt.dvector], otypes=[pt.dscalar])
+        def _logp(th):
+            return np.asarray(self(th), dtype="float64")
 
-    def perform(self, node, inputs, outputs):
-        lat, lon, alt, offset, sow, delta_f = inputs
-        out_do = outputs.copy()
-        out_ph = outputs.copy()
-
-        self.doll.perform(node, (lat, lon, delta_f), out_do)
-        self.phll.perform(node, (lat, lon, alt, offset, sow), out_ph)
-
-        outputs = out_do + out_ph
+        return _logp(theta)
 
 
 def sub_stats(stat1, stat2, key):
-    p1 = stat1[key].to_dict()
-    p2 = stat2[key].to_dict()
+    p1 = dict(stat1[key])
+    p2 = dict(stat2[key])
 
     p1["lonlat[0]"] = p2["lonlat[0]"]
     return p1
 
 
 def characterize_posterior(model_name, trace, plot=False, plot_title="trace"):
-    stats = pm.summary(trace)
+    """Summarize the posterior of a sampled model.
+
+    Parameters
+    ----------
+    model_name: str
+        The name of the model (used to strip the model prefix from variable
+        names so results match the historical output format).
+    trace: InferenceData
+        The sampling result.
+    plot: bool
+        Whether to save trace/pair plots.
+    plot_title: str
+        Base name for the plot files.
+    """
+    stats = pm.stats.summary(trace, round_to="auto")
     print(stats.to_string())
     if plot:
         az.plot_trace(trace)
         plt.savefig(f"{plot_title}_chain_histogram.pdf")
-        # plt.show()
+        plt.close()
 
-        az.plot_pair(
-            trace,
-            #var_names=["lonlat[0]", "lonlat[1]"],
-            kind="hexbin",
-            marginals=True,
-            # figsize=(8, 6),
-        )
+        az.plot_pair(trace, triangle="lower", marginal=True)
         plt.savefig(f"{plot_title}_joint_lat_lon.pdf")
-        # plt.show()
+        plt.close()
 
-    rhat = stats["r_hat"]
+    rhat = stats["r_hat"].to_dict()
 
-    func_dict = {
-        "std": np.std,
-        "5%": lambda x: np.percentile(x, 5),
-        "median": lambda x: np.percentile(x, 50),
-        "95%": lambda x: np.percentile(x, 95),
-    }
+    post = trace["posterior"]
 
-    stats = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
+    def find_samples(name):
+        """Return a flat 1-D array of samples for one summary row.
 
-    name_len = len(model_name)
+        Modern PyMC stores a free variable either as a single posterior node
+        with a trailing element dimension (e.g. ``lonlat`` with shape
+        ``(chain, draw, 2)``) or, when it was declared element by element
+        (e.g. ``lonlat[0]``, ``lonlat[1]``), as separate scalar nodes.  The
+        summary index may also carry the model-name prefix
+        (``doppler::lonlat[0]``).  Try each combination in turn.
+        """
+        candidates = [name]
+        for sep in ("::", "_"):
+            prefix = f"{model_name}{sep}"
+            if name.startswith(prefix):
+                candidates.append(name[len(prefix):])
+        for cand in list(candidates):
+            if "[" in cand and cand.endswith("]"):
+                base, _, _rest = cand.partition("[")
+                candidates.append(base)
 
-    def clean_key(k):
-        return k[name_len+1:]
+        idx = None
+        if "[" in name and name.endswith("]"):
+            _, _, rest = name.partition("[")
+            idx = int(rest[:-1])
+
+        for cand in candidates:
+            if cand not in post:
+                continue
+            v = post[cand].values
+            flat = v.reshape(-1, *v.shape[2:])
+            if idx is not None and flat.ndim > 1:
+                return np.asarray(flat[:, idx]).reshape(-1)
+            return np.asarray(flat).reshape(-1)
+
+        raise KeyError(f"Could not find posterior samples for {name!r} "
+                       f"(tried {candidates}; posterior has {list(post.data_vars)})")
 
     def wrap180(x):
         return ((x + 180) % 360) - 180
 
-    func_dict = {
-        "std": lambda x: np.std(x),
-        "5%": lambda x: np.percentile(wrap180(x), 5),
-        "median": lambda x: np.percentile(wrap180(x), 50),
-        "95%": lambda x: np.percentile(wrap180(x), 95),
-    }
+    def clean_key(k):
+        # Strip the model-name prefix ("doppler::", "phase::") added by modern
+        # PyMC named-models so keys match the historical output format.
+        for sep in ("::", "_"):
+            prefix = f"{model_name}{sep}"
+            if k.startswith(prefix):
+                return k[len(prefix):]
+        return k
 
-    stats2 = az.summary(trace, stat_funcs=func_dict, round_to=6, extend=False)
-
-    ret = {}
-    for key in ['std', '5%', 'median', '95%']:
-        p1 = stats[key].to_dict()
-        p2 = stats2[key].to_dict()
-
-        lon_name = f"{model_name}_lonlat[0]"
-        p1[lon_name] = p2[lon_name]
-
-        ret[key] = p1
-
-    # now invert
     ret_swap = {}
-    for key in stats['median'].keys():
+    for key in stats.index:
         k = clean_key(key)
+        samples = find_samples(key)
+        lon_samples = wrap180(samples) if k == "lonlat[0]" else samples
         print(f"{key} -> {k}")
-        ret_swap[k] = {'r_hat': rhat[key]}
-        for k2 in ['std', '5%', 'median', '95%']:
-            ret_swap[k][k2] = ret[k2][key]
+        ret_swap[k] = {
+            'r_hat': rhat[key],
+            'std': float(np.std(samples)),
+            '5%': float(np.percentile(lon_samples, 5)),
+            'median': float(np.percentile(lon_samples, 50)),
+            '95%': float(np.percentile(lon_samples, 95)),
+        }
 
     return ret_swap
 
@@ -238,12 +245,11 @@ def do_mcmc(n_samples=3000, method='NUTS'):
     n_tune = n_samples
     n_chains = 4
     if method == 'NUTS':
-        start = pm.find_MAP()
-        idata = pm.sample(n_samples, init='advi+adapt_diag', tune=n_tune, chains=n_chains,
-                          start=start, return_inferencedata=True, discard_tuned_samples=True)
+        idata = pm.sample(draws=n_samples, tune=n_tune, chains=n_chains,
+                          init='jitter+adapt_diag',
+                          return_inferencedata=True, discard_tuned_samples=True)
     else:
-        trace = pm.sample_smc(n_samples, parallel=True)
-        idata = az.data.convert_to_inference_data(trace)
+        idata = pm.sample_smc(draws=n_samples)
 
     return idata
 
@@ -255,19 +261,24 @@ def doppler_model(t0_uncorrected, acq, gps_t, ephs, plot):
     # DO THE DOPPLER FiX
     with pm.Model("doppler") as model:
 
-        lonlat = VMF("lonlat", k=0.05, shape=2, testval=np.array([0.0, 0.0]))
+        lonlat = VMF("lonlat", k=0.05, shape=2,
+                     initval=np.array([0.0, 0.0]))
         lon = lonlat[0]
         lat = lonlat[1]
 
         delta_f = pm.Normal("delta_f_khz", mu=0.0,
-                            sigma=1.0, testval=0.0) * 1000
+                            sigma=1.0, initval=0.0) * 1000
 
-        theta_do = tt.as_tensor_variable([lat, lon, delta_f])
-        like = pm.Potential("like", do_loglike(theta_do))
+        theta_do = pt.as_tensor_variable([lat, lon, delta_f])
+        like = pm.Potential("like", do_loglike.as_tensor(theta_do))
 
-        start = pm.find_MAP()
-        idata = pm.sample(draws=1000, init='advi+adapt_diag', tune=1000, chains=4,
-                          start=start, return_inferencedata=True, discard_tuned_samples=True)
+        # The likelihood is a black-box Python function, so gradients are not
+        # available and NUTS cannot be used.  Metropolis sampling is used
+        # instead (it only needs log-probability evaluations).
+        step = pm.Metropolis()
+        idata = pm.sample(draws=1000, tune=1000, chains=4, step=step,
+                          progressbar=False,
+                          return_inferencedata=True, discard_tuned_samples=True)
 
     doppler_stats = characterize_posterior(
         "doppler", idata, plot=plot, plot_title=f"doppler_joint_{t0_uncorrected.isoformat()}")
@@ -291,9 +302,9 @@ def phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, eph
         print(f"lonlat_start = {[lon_start, lat_start]}")
 
         lon = pm.Normal('lonlat[0]', mu=lon_start,
-                        sigma=doppler_stats['lonlat[0]']['std'])
+                        sigma=max(doppler_stats['lonlat[0]']['std'], 1e-3))
         lat = pm.Normal('lonlat[1]', mu=lat_start,
-                        sigma=doppler_stats['lonlat[1]']['std'])
+                        sigma=max(doppler_stats['lonlat[1]']['std'], 1e-3))
 
         alt = pm.HalfNormal("alt", sigma=1.0) * 1000
         if False:
@@ -307,19 +318,20 @@ def phase_model(t0_uncorrected, doppler_stats, clock_offset_std, acq, gps_t, eph
         sow = pm.Uniform("sow_offset",  lower=-clk_err,
                          upper=clk_err) + gps_t.sow()
 
-        theta_ph = tt.as_tensor_variable([lat, lon, alt, offset, sow])
+        theta_ph = pt.as_tensor_variable([lat, lon, alt, offset, sow])
 
-        phase_like = pm.Potential("phase_like", ph_loglike(theta_ph))
+        phase_like = pm.Potential("phase_like", ph_loglike.as_tensor(theta_ph))
 
         n_draws = 3000
         if True:
-            start = pm.find_MAP()
             n_tune = n_draws
-            idata = pm.sample(draws=n_draws, init='advi+adapt_diag', tune=n_tune,
-                              start=start, return_inferencedata=True, discard_tuned_samples=True)
+            # Black-box likelihood => no gradients => use Metropolis.
+            step = pm.Metropolis()
+            idata = pm.sample(draws=n_draws, tune=n_tune, chains=4, step=step,
+                              progressbar=False,
+                              return_inferencedata=True, discard_tuned_samples=True)
         else:
-            trace = pm.sample_smc(draws=n_draws, parallel=True)
-            idata = az.data.convert_to_inference_data(trace)
+            idata = pm.sample_smc(draws=n_draws)
 
     phase_stats = characterize_posterior(
         "phase", idata, plot=plot, plot_title=f"phase_joint_{t0_uncorrected.isoformat()}")

@@ -1,9 +1,26 @@
-import pymc3 as pm
+"""Von Mises-Fisher distribution on the sphere, ported to PyMC 6 / PyTensor.
+
+See https://en.wikipedia.org/wiki/Von_Mises%E2%80%93Fisher_distribution
+
+The distribution is over a 2-vector ``[lon, lat]`` in degrees (longitude
+0..360, latitude -90..90).  The PyMC3/Theano implementation has been updated
+for the current PyMC (>=5) and PyTensor stack:
+
+* ``theano`` -> ``pytensor``
+* ``theano.compile.ops.as_op`` -> a hand-written ``pytensor.graph.Op``
+  subclass (``VmfLogpOp``), keeping the same black-box numerical logp
+  evaluation as before,
+* the PyMC3 ``Continuous`` subclass API is replaced with a ``pm.CustomDist``
+  which supplies that black-box ``logp`` (and a ``random`` function for prior
+  predictive sampling).
+"""
 import numpy as np
-import theano.tensor as tt
-from theano.compile.ops import as_op
-from pymc3.distributions import draw_values, generate_samples
+import pytensor
+import pytensor.tensor as pt
+from pytensor.graph import Apply, Op
 from scipy.spatial.transform import Rotation as R
+
+import pymc as pm
 
 
 def construct_euler_rotation_matrix(alpha, beta, gamma):
@@ -27,7 +44,7 @@ def cart2dir(cart):
     direction_array : returns an array of [declination, inclination, intensity]
     Examples
     --------
-    >>> pmag.cart2dir([0,1,0])
+    >>> cart2dir([0,1,0])
     array([ 90.,   0.,   1.])
     """
     cart = np.array(cart)
@@ -68,7 +85,7 @@ def dir2cart(d):
     cart : array of [x,y,z]
     Examples
     --------
-    >>> pmag.dir2cart([200,40,1])
+    >>> dir2cart([200,40,1])
     array([-0.71984631, -0.26200263,  0.64278761])
     """
     ints = np.ones(len(d)).transpose(
@@ -86,8 +103,6 @@ def dir2cart(d):
         else:
             ints = np.array([1.])
     cart = np.array([ints * np.cos(decs) * np.cos(incs), ints *
-                     np.sin(decs) * np.cos(incs), ints * np.sin(incs)])
-    cart = np.array([ints * np.cos(decs) * np.cos(incs), ints *
                      np.sin(decs) * np.cos(incs), ints * np.sin(incs)]).transpose()
     return cart
 
@@ -104,7 +119,7 @@ def angle(D1, D2):
     angle : angle between the directions as a single-element array
     Examples
     --------
-    >>> pmag.angle([350.0,10.0],[320.0,20.0])
+    >>> angle([350.0,10.0],[320.0,20.0])
     array([ 30.59060998])
     """
     D1 = np.array(D1)
@@ -127,50 +142,78 @@ def angle(D1, D2):
     return np.array(angles)
 
 
-@as_op(itypes=[tt.dvector, tt.dscalar, tt.dvector], otypes=[tt.dscalar])
-def vmf_logp(lon_lat, k, x):
-
+def _vmf_logp_numeric(lon_lat, k, x):
+    """Numerical Von Mises-Fisher log-density at ``x`` (degrees) for mean
+    direction ``lon_lat`` (degrees) and concentration ``k``."""
+    x = np.asarray(x, dtype=float)
+    lon_lat = np.asarray(lon_lat, dtype=float)
     if x[1] < -90. or x[1] > 90.:
         # raise RuntimeError(f"Value out of range {x}")
-        return np.array(-1e6)  # np.array(-np.inf)
+        return -1e6  # np.array(-np.inf)
     if k < eps:
-        return np.log(1. / 4. / np.pi)
+        return float(np.log(1. / 4. / np.pi))
     theta = angle(x, lon_lat)[0]
     PdA = k*np.exp(k*np.cos(theta*d2r))/(2*np.pi*(np.exp(k)-np.exp(-k)))
-    logp = np.log(PdA)
-    return np.array(logp)
+    return float(np.log(PdA))
 
 
-class VMF(pm.Continuous):
-    '''
-        https://en.wikipedia.org/wiki/Von_Mises%E2%80%93Fisher_distribution
-    '''
+class VmfLogpOp(Op):
+    """Black-box numerical Von Mises-Fisher log-density.
 
-    def __init__(self, lon_lat=[0.0, 0.0], k=0.0,
-                 *args, **kwargs):
-        super(VMF, self).__init__(*args, **kwargs)
+    Inputs: ``lon_lat`` (2-vector), ``k`` (scalar), ``x`` (2-vector).
+    Output: scalar log-density.  This replaces the PyMC3-era
+    ``theano.compile.ops.as_op`` decorator.
+    """
 
-        self._k = tt.as_tensor_variable(pm.floatX(k))
-        self._lon_lat = tt.as_tensor(np.array(lon_lat))
-        print(f"init({lon_lat})")
+    __props__ = ()
 
-    def logp(self, value):
-        lon_lat = self._lon_lat
-        k = self._k
-        value = tt.as_tensor_variable(value)
-        return vmf_logp(lon_lat, k, value)
+    def make_node(self, lon_lat, k, x):
+        lon_lat = pt.as_tensor_variable(lon_lat)
+        k = pt.as_tensor_variable(k)
+        x = pt.as_tensor_variable(x)
+        return Apply(self, [lon_lat, k, x], [pt.scalar()])
 
-    def _random(self, lon_lat, k, size=None):
-        alpha = 0.
-        beta = np.pi / 2. - lon_lat[1] * d2r
-        gamma = lon_lat[0] * d2r
+    def perform(self, node, inputs, outputs):
+        lon_lat, k, x = inputs
+        outputs[0][0] = np.array(
+            _vmf_logp_numeric(lon_lat, k, x), dtype="float64")
 
-        rotation_matrix = construct_euler_rotation_matrix(alpha, beta, gamma)
 
-        lamda = np.exp(-2*k)
+# Module-level singleton so the Op is picklable/shared across the graph.
+vmf_logp_op = VmfLogpOp()
 
-        r1 = np.random.random()
-        r2 = np.random.random()
+
+def vmf_logp(value, lon_lat, k):
+    """Symbolic Von Mises-Fisher log-density.
+
+    Used as the ``logp`` callable of :class:`pm.CustomDist`, so it receives
+    the symbolic value tensor plus symbolic parameters and must return a
+    symbolic scalar.
+    """
+    return vmf_logp_op(lon_lat, k, value)
+
+
+def vmf_random(lon_lat, k, rng=None, size=None):
+    """Draw random ``[lon, lat]`` samples from the Von Mises-Fisher
+    distribution (used for prior/posterior predictive sampling)."""
+    lon_lat = np.asarray(lon_lat, dtype=float)
+    k = float(k)
+    if rng is None:
+        rng = np.random.default_rng()
+
+    alpha = 0.
+    beta = np.pi / 2. - lon_lat[1] * d2r
+    gamma = lon_lat[0] * d2r
+
+    rotation_matrix = construct_euler_rotation_matrix(alpha, beta, gamma)
+
+    lamda = np.exp(-2*k)
+
+    n = int(np.prod(size)) if size is not None else 1
+    out = np.empty((n, 2))
+    for i in range(n):
+        r1 = rng.random()
+        r2 = rng.random()
         colat = 2*np.arcsin(np.sqrt(-np.log(r1*(1-lamda)+lamda)/2/k))
         this_lon = 2*np.pi*r2
         lat = 90-colat*r2d
@@ -179,12 +222,31 @@ class VMF(pm.Continuous):
         unrotated = dir2cart([lon, lat])[0]
         rotated = np.transpose(np.dot(rotation_matrix, unrotated))
         rotated_dir = cart2dir(rotated)
-        return np.array([rotated_dir[0], rotated_dir[1]])
+        out[i] = [rotated_dir[0], rotated_dir[1]]
+    return out.reshape(size if size is not None else (2,))
 
-    def random(self, point=None, size=None):
 
-        lon_lat, k = draw_values(
-            [self._lon_lat, self._k], point=point, size=size)
-        return generate_samples(self._random, lon_lat, k,
-                                dist_shape=self.shape,
-                                size=size)
+class VMF:
+    """Von Mises-Fisher distribution on the sphere.
+
+    This is now a thin factory around :class:`pm.CustomDist` that keeps the
+    historical calling convention::
+
+        lonlat = VMF("lonlat", k=0.05, shape=2)
+
+    which registers a free random variable called ``lonlat`` in the current
+    PyMC model.  Additional keyword arguments (e.g. ``initval``) are passed
+    through to ``pm.CustomDist``.
+    """
+
+    def __new__(cls, name, lon_lat=(0.0, 0.0), k=0.0, **kwargs):
+        lon_lat = np.asarray(lon_lat, dtype=float)
+        return pm.CustomDist(
+            name,
+            lon_lat,
+            k,
+            logp=vmf_logp,
+            random=vmf_random,
+            signature="(2),()->(2)",
+            **kwargs,
+        )

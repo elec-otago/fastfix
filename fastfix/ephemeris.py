@@ -1,10 +1,9 @@
 # Copyright (C) Tim Molteno 2008-2019. All rights reserved
 
-from unlzw import unlzw
+from unlzw3 import unlzw
 import io
 import math
 import logging
-import string
 
 import numpy as np
 
